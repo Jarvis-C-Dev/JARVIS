@@ -3,41 +3,67 @@ import { useMemo, useRef } from "react";
 import {
   AdditiveBlending,
   type Blending,
+  BufferAttribute,
   BufferGeometry,
-  NormalBlending,
+  EdgesGeometry,
   Float32BufferAttribute,
   type Group,
+  IcosahedronGeometry,
   type Mesh,
+  NormalBlending,
   type Points,
 } from "three";
 import type { AssistantPhase } from "../../types/generated/AssistantPhase";
 import type { MicState } from "../../types/generated/MicState";
 import type { OrbMotion } from "../Orb2D";
+import { energyFor, sparkle } from "./motion";
 import { contextLostHandler } from "./renderer";
 
 /**
- * Hologram colours; error is the only warm one, and shape and motion carry the
- * state too. On a dark background light adds up (a glow); on a light one it
- * would vanish, so the light theme draws solid, deeper colours instead.
+ * Amber and gold, in the manner of a sci-fi interface. Error is the only red, and
+ * also changes shape; shape and motion carry every state, never colour alone. On a
+ * dark background light adds up (a glow); on a light one it would vanish, so the
+ * light theme draws solid, deeper colours instead.
  */
 const PALETTE = {
-  dark: { main: "#5ec8ff", error: "#ff5a5a", muted: "#7f8b99" },
-  light: { main: "#2563eb", error: "#b91c1c", muted: "#59636e" },
+  dark: {
+    main: "#ffb13b",
+    hot: "#ffe2a0",
+    error: "#ff5a5a",
+    muted: "#8a8f98",
+  },
+  light: {
+    main: "#c2570c",
+    hot: "#e07b1a",
+    error: "#b91c1c",
+    muted: "#59636e",
+  },
 };
 
-/** Points spread evenly over a sphere (Fibonacci lattice): the particle shell. */
-function shell(count: number, radius: number): BufferGeometry {
-  const pos: number[] = [];
+const SPARKS = 220;
+const TILTS: [number, number, number][] = [
+  [Math.PI / 2, 0, 0],
+  [Math.PI / 2.6, 0.7, 0],
+  [Math.PI / 1.7, -0.9, 0.4],
+];
+
+/** Glowing lattice lines: the edges of a subdivided icosahedron. */
+function lattice(radius: number, detail: number): BufferGeometry {
+  return new EdgesGeometry(new IcosahedronGeometry(radius, detail), 1);
+}
+
+/** Sparks: a unit direction each, spread evenly over a sphere (Fibonacci lattice). */
+function sparkDirections(count: number): Float32Array {
+  const out = new Float32Array(count * 3);
   const golden = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < count; i++) {
     const y = 1 - (i / (count - 1)) * 2;
     const r = Math.sqrt(1 - y * y);
-    const t = golden * i;
-    pos.push(Math.cos(t) * r * radius, y * radius, Math.sin(t) * r * radius);
+    out[i * 3] = Math.cos(golden * i) * r;
+    out[i * 3 + 1] = y;
+    out[i * 3 + 2] = Math.sin(golden * i) * r;
   }
-  const g = new BufferGeometry();
-  g.setAttribute("position", new Float32BufferAttribute(pos, 3));
-  return g;
+  return out;
 }
 
 interface SceneProps {
@@ -51,98 +77,158 @@ interface SceneProps {
 
 function Scene({ phase, mic, motion, still, dark }: SceneProps) {
   const group = useRef<Group>(null);
+  const outer = useRef<Group>(null);
+  const inner = useRef<Group>(null);
   const core = useRef<Mesh>(null);
-  const ring = useRef<Mesh>(null);
-  const halo = useRef<Mesh>(null);
-  const dots = useRef<Points>(null);
-  const particles = useMemo(() => shell(360, 1.55), []);
+  const rings = useRef<(Mesh | null)[]>([]);
+  const sparks = useRef<Points>(null);
 
   const error = phase === "error";
   const muted = mic === "muted";
   const tones = dark ? PALETTE.dark : PALETTE.light;
   const colour = error ? tones.error : muted ? tones.muted : tones.main;
+  const hot = error ? tones.error : muted ? tones.muted : tones.hot;
   const blend: Blending = dark ? AdditiveBlending : NormalBlending;
-  const opacity = muted ? 0.35 : dark ? 0.6 : 0.85;
+  const dim = muted ? 0.4 : 1;
+  // Light additive layers are faint; solid ones need to be stronger to read.
+  const k = dark ? 0.55 : 0.85;
+
+  const outerGeo = useMemo(() => lattice(1.55, 2), []);
+  const innerGeo = useMemo(() => lattice(1.0, 1), []);
+  const directions = useMemo(() => sparkDirections(SPARKS), []);
+  const sparkGeo = useMemo(() => {
+    const g = new BufferGeometry();
+    g.setAttribute(
+      "position",
+      new Float32BufferAttribute(directions.slice(), 3),
+    );
+    return g;
+  }, [directions]);
 
   // Runs only on rendered frames: every frame while animating, one per change
   // when idle (frameloop "demand"), none while hidden.
   useFrame((state) => {
     const t = still ? 0 : state.clock.getElapsedTime();
-    const g = group.current;
-    if (!g || !core.current || !ring.current || !halo.current) return;
-    const pulse =
-      motion === "pulse"
-        ? 1 + 0.12 * Math.sin(t * 5.2)
-        : motion === "breathe"
-          ? 1 + 0.06 * Math.sin(t * 2.1)
-          : 1;
-    core.current.scale.setScalar(pulse);
-    core.current.rotation.set(t * 0.25, t * 0.4, 0);
-    ring.current.rotation.z = motion === "spin" ? t * 2.4 : t * 0.2;
-    const wave = motion === "wave" ? (t * 1.1) % 1 : 0;
-    halo.current.scale.setScalar(1 + wave * 0.9);
-    (halo.current.material as { opacity: number }).opacity =
-      motion === "wave" ? 0.5 * (1 - wave) : 0;
-    if (dots.current) dots.current.rotation.y = t * 0.08;
-    g.rotation.x = 0.35;
+    const e = still ? 0 : energyFor(motion, t);
+    if (!group.current || !core.current) return;
+
+    // The whole hologram shivers and swells with the energy: the jolt.
+    const jolt =
+      1 + 0.07 * e + (motion === "wave" ? 0.05 * e * Math.sin(t * 40) : 0);
+    group.current.scale.setScalar(jolt);
+    group.current.rotation.x = 0.35 + 0.04 * e * Math.sin(t * 17);
+
+    // Two lattices turning against each other; thinking spins them harder.
+    const spin = motion === "spin" ? 2.2 : 1;
+    if (outer.current)
+      outer.current.rotation.set(t * 0.12 * spin, t * 0.2 * spin, 0);
+    if (inner.current)
+      inner.current.rotation.set(-t * 0.25 * spin, -t * 0.34 * spin, t * 0.1);
+
+    // The core flares with the energy.
+    core.current.scale.setScalar(0.85 + 0.9 * e);
+    (core.current.material as { opacity: number }).opacity =
+      dim * Math.min(1, 0.45 + 0.9 * e);
+
+    // Nested rings at different tilts; their radius jolts with the energy.
+    rings.current.forEach((m, i) => {
+      if (!m) return;
+      const dir = i % 2 ? -1 : 1;
+      m.rotation.z = dir * t * (0.25 + i * 0.35) * spin;
+      m.scale.setScalar(
+        1 + 0.12 * e * (1 + i * 0.4) * (0.6 + 0.4 * Math.sin(t * 9 + i)),
+      );
+    });
+
+    // Sparks fly outward in bursts, each flickering on its own beat.
+    const pts = sparks.current;
+    if (pts) {
+      const pos = (pts.geometry.getAttribute("position") as BufferAttribute)
+        .array as Float32Array;
+      for (let i = 0; i < SPARKS; i++) {
+        const burst = e * e * 1.4 * sparkle(i, t);
+        const r = 1.7 + 0.12 * Math.sin(t * 0.9 + i) + burst;
+        pos[i * 3] = directions[i * 3] * r;
+        pos[i * 3 + 1] = directions[i * 3 + 1] * r;
+        pos[i * 3 + 2] = directions[i * 3 + 2] * r;
+      }
+      pts.geometry.getAttribute("position").needsUpdate = true;
+      pts.rotation.y = t * 0.06;
+    }
   });
 
   return (
     <group ref={group}>
-      <mesh ref={core}>
+      <group ref={outer}>
+        <lineSegments geometry={outerGeo}>
+          <lineBasicMaterial
+            color={colour}
+            transparent
+            opacity={dim * k * 0.7}
+            blending={blend}
+            depthWrite={false}
+          />
+        </lineSegments>
+      </group>
+      <group ref={inner}>
         {/* A different solid for an error, so it never rests on colour alone. */}
-        {error ? (
-          <octahedronGeometry args={[0.95, 0]} />
-        ) : (
-          <icosahedronGeometry args={[0.95, 1]} />
-        )}
+        <lineSegments
+          geometry={useMemo(
+            () => (error ? lattice(0.95, 0) : innerGeo),
+            [error, innerGeo],
+          )}
+        >
+          <lineBasicMaterial
+            color={hot}
+            transparent
+            opacity={dim * k}
+            blending={blend}
+            depthWrite={false}
+          />
+        </lineSegments>
+      </group>
+      <mesh ref={core}>
+        <sphereGeometry args={[0.3, 20, 20]} />
         <meshBasicMaterial
-          color={colour}
-          wireframe
+          color={hot}
           transparent
-          opacity={opacity}
+          opacity={0.6}
           blending={blend}
           depthWrite={false}
         />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[0.55, 24, 24]} />
-        <meshBasicMaterial
-          color={colour}
-          transparent
-          opacity={muted ? 0.08 : 0.22}
-          blending={blend}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry
-          args={[1.4, 0.018, 8, 120, muted ? Math.PI : Math.PI * 1.7]}
-        />
-        <meshBasicMaterial
-          color={colour}
-          transparent
-          opacity={opacity}
-          blending={blend}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh ref={halo} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.4, 0.01, 6, 120]} />
-        <meshBasicMaterial
-          color={colour}
-          transparent
-          opacity={0}
-          blending={blend}
-          depthWrite={false}
-        />
-      </mesh>
-      <points ref={dots} geometry={particles}>
+      {TILTS.map((tilt, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            rings.current[i] = m;
+          }}
+          rotation={tilt}
+        >
+          <torusGeometry
+            args={[
+              1.25 + i * 0.28,
+              0.014,
+              6,
+              120,
+              muted ? Math.PI : Math.PI * (1.8 - i * 0.2),
+            ]}
+          />
+          <meshBasicMaterial
+            color={i === 0 ? hot : colour}
+            transparent
+            opacity={dim * (dark ? 0.7 : 0.9)}
+            blending={blend}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+      <points ref={sparks} geometry={sparkGeo}>
         <pointsMaterial
-          color={colour}
-          size={0.025}
+          color={hot}
+          size={0.035}
           transparent
-          opacity={muted ? 0.2 : 0.55}
+          opacity={dim * (dark ? 0.8 : 0.9)}
           blending={blend}
           depthWrite={false}
         />
@@ -183,7 +269,7 @@ export default function Hologram3D({
       <Canvas
         frameloop={frameloop}
         dpr={[1, 2]}
-        camera={{ position: [0, 0, 5.2], fov: 45 }}
+        camera={{ position: [0, 0, 5.6], fov: 45 }}
         gl={{ alpha: true, antialias: true, powerPreference: "low-power" }}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener(
