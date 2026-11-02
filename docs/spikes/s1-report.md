@@ -35,8 +35,49 @@ window near 400 ms, at the cost of cutting off slow speakers. To decide with dat
 Standby cost while listening (VAD + STT, one thread): 1.8% of wall time. Not the Task Manager
 figure, and the wake word was not running.
 
+### Benchmark on W1: 30 command phrases read once (`bench`, 4 threads, quiet room, desk distance)
+
+Raw table from the tool, then the corrected scores. The owner said "what **time** is the weather
+like in Mumbai" (all three models wrote exactly that, so it is not an error), and models write
+"552" for "five five two" (right for an assistant, but the first version of the tool counted it as
+three errors; the tool now scores spoken digits as digit words).
+
+| Model | Raw WER, whole | Raw phrases right | Corrected WER, whole | Corrected phrases right | Decode time per phrase |
+| --- | --- | --- | --- | --- | --- |
+| Moonshine tiny int8 | 9.6% | 23/30 | **6.6%** | **25/30** | 41 ms |
+| Moonshine base int8 | 5.9% | 25/30 | **2.9%** | **27/30** | 76 ms |
+| Whisper base.en | 5.1% | 26/30 | **2.2%** | **28/30** | 241 ms |
+
+The corrected scores come from the complete lists of whole-recording mistakes (136 reference words).
+One speaker, one session: a difference of one phrase between base and Whisper is noise.
+
+What the mistakes were (whole recording):
+- **"Jarvis" is the weak spot.** Tiny and base got it wrong in both phrases ("jawless", "jauis",
+  "Javas", "jawis"); Whisper got one of two ("Jealous"). Speech-to-text cannot be trusted to spell the
+  name; the wake word is a separate detector, and the orchestrator must not depend on the
+  transcript containing "Jarvis".
+- Word-splitting variants ("Re-name", "notepads", "node pad") and "list the apps I can open" →
+  "list the apps icon open" (tiny and base). Harmless to a language model, wrong to an exact matcher.
+- Proper nouns Mumbai, Spotify, Chrome were right in every whole recording.
+
+End of speech to transcript (adds the 0.7 s silence window): tiny about 0.74 s, base about 0.78 s,
+Whisper about 0.94 s, all inside the §10 limit of 1.2 s; the 0.5 s target needs a shorter window.
+Moonshine base costs 35 ms more than tiny and cut word errors by more than half; Whisper's extra
+165 ms over base bought about one phrase in thirty. Candidate for D-04: **Moonshine base**, with
+Whisper base.en as the accuracy option. Not decided.
+
+### The voice detector clips the start of requests
+
+Every model scored worse on the detector's cut ("vad") than on the whole recording, by the same
+amount: 3 more phrases wrong out of 30 for each model (WER +2.9 to +3.7 points). Examples from the
+owner's run: "open Chrome" → "Open crew", "mute the microphone" → "Viewed the microphone",
+"good evening Jarvis" → "evening", "find photos" → "5 photos", "read the file" → "hit the file".
+The first sound of the phrase is cut off. On a sample file, padding the cut by 0.3 s before it
+recovered half of the lost words and 0.6 s recovered all of them. This is the spec's pre-roll
+(§6.2: keep the last 2 s in RAM); `bench --preroll 0.3,0.6` measures the amounts on a real run.
+Still to do: run `bench` with the widened rows on W1 and pick the amount.
+
 Open: WER on 100 command utterances in a quiet room, at 0.5 m and 1 m (needs the corpus, task A-09).
-Moonshine vs Whisper base.en not compared yet.
 
 ## Wake word (D-02): sherpa-onnx open-vocabulary KWS (zipformer 3.3M, GigaSpeech)
 

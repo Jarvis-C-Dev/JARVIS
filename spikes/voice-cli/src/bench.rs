@@ -46,10 +46,28 @@ const PHRASES: &[&str] = &[
     "open the settings",
 ];
 
+/// What the voice detector cut out, and where it starts inside the whole recording.
+struct Segment {
+    start: usize,
+    samples: Vec<f32>,
+}
+
 struct Take {
     reference: String,
     whole: Vec<f32>,
-    segment: Option<Vec<f32>>,
+    segment: Option<Segment>,
+}
+
+/// The detector's segment widened by `pre_s` seconds before it and 0.2 s after it, cut from
+/// the whole recording. This is the "pre-roll" the spec asks for (section 6.2).
+fn padded(whole: &[f32], seg: &Segment, pre_s: f32) -> Vec<f32> {
+    let begin = seg.start.saturating_sub((pre_s * 16_000.0) as usize);
+    let end = (seg.start + seg.samples.len() + 3_200).min(whole.len());
+    if begin < end {
+        whole[begin..end].to_vec()
+    } else {
+        seg.samples.clone()
+    }
 }
 
 /// Lower case, letters, digits and apostrophes only, split into words.
@@ -65,9 +83,22 @@ fn normalise(s: &str) -> Vec<String> {
         })
         .collect::<String>()
         .split_whitespace()
-        .map(str::to_string)
+        .flat_map(|w| {
+            // Spoken digits come back as numerals ("552"); score them as spoken ("five five two").
+            if w.chars().all(|c| c.is_ascii_digit()) {
+                w.chars()
+                    .map(|c| DIGITS[(c as u8 - b'0') as usize].to_string())
+                    .collect()
+            } else {
+                vec![w.to_string()]
+            }
+        })
         .collect()
 }
+
+const DIGITS: [&str; 10] = [
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+];
 
 fn edit_distance(a: &[String], b: &[String]) -> usize {
     let mut prev: Vec<usize> = (0..=b.len()).collect();
@@ -121,7 +152,7 @@ impl Score {
         self.stt += took;
         if r == h {
             self.exact += 1;
-        } else if self.misses.len() < 8 {
+        } else if self.misses.len() < 12 {
             self.misses
                 .push((reference.to_string(), hypothesis.to_string()));
         }
@@ -137,7 +168,7 @@ fn record_take(
     cap: &audio::Capture,
     vad: &VoiceActivityDetector,
     window: Duration,
-) -> (Vec<f32>, Option<Vec<f32>>) {
+) -> (Vec<f32>, Option<Segment>) {
     for _ in cap.rx.try_iter() {}
     vad.reset();
     let (mut whole, mut segment, mut stop_at) = (Vec::new(), None, None::<Instant>);
@@ -150,7 +181,10 @@ fn record_take(
         vad.accept_waveform(&chunk);
         if segment.is_none() && !vad.is_empty() {
             if let Some(s) = vad.front() {
-                segment = Some(s.samples().to_vec());
+                segment = Some(Segment {
+                    start: s.start().max(0) as usize,
+                    samples: s.samples().to_vec(),
+                });
             }
             vad.pop();
             stop_at = Some(Instant::now() + Duration::from_millis(300));
@@ -160,7 +194,10 @@ fn record_take(
         vad.flush();
         if !vad.is_empty() {
             if let Some(s) = vad.front() {
-                segment = Some(s.samples().to_vec());
+                segment = Some(Segment {
+                    start: s.start().max(0) as usize,
+                    samples: s.samples().to_vec(),
+                });
             }
             vad.pop();
         }
@@ -181,7 +218,10 @@ fn take_from_wav(path: &str, reference: &str, vad: &VoiceActivityDetector) -> Re
         vad.accept_waveform(chunk);
         if segment.is_none() && !vad.is_empty() {
             if let Some(s) = vad.front() {
-                segment = Some(s.samples().to_vec());
+                segment = Some(Segment {
+                    start: s.start().max(0) as usize,
+                    samples: s.samples().to_vec(),
+                });
             }
         }
         while !vad.is_empty() {
@@ -191,7 +231,10 @@ fn take_from_wav(path: &str, reference: &str, vad: &VoiceActivityDetector) -> Re
     if segment.is_none() {
         vad.flush();
         if let Some(s) = vad.front() {
-            segment = Some(s.samples().to_vec());
+            segment = Some(Segment {
+                start: s.start().max(0) as usize,
+                samples: s.samples().to_vec(),
+            });
         }
         while !vad.is_empty() {
             vad.pop();
@@ -274,6 +317,17 @@ pub fn run(a: &Args) -> Result<(), String> {
     }
 
     let (threads, provider) = (a.num("threads", 4)?, a.get("provider").unwrap_or("cpu"));
+    let prerolls: Vec<f32> = match a.get("preroll") {
+        Some(v) => v
+            .split(',')
+            .map(|x| {
+                x.trim()
+                    .parse()
+                    .map_err(|_| format!("--preroll {x:?} is not a number"))
+            })
+            .collect::<Result<_, _>>()?,
+        None => vec![0.3, 0.6],
+    };
     println!(
         "\n{} takes. Decoding the same audio with {} model(s)...\n",
         takes.len(),
@@ -281,27 +335,42 @@ pub fn run(a: &Args) -> Result<(), String> {
     );
     let unheard = takes.iter().filter(|t| t.segment.is_none()).count();
     println!(
-        "{:<10} {:<6} {:>7} {:>9} {:>10}",
+        "{:<10} {:<9} {:>7} {:>9} {:>10}",
         "model", "audio", "WER", "exact", "avg STT"
     );
     let mut all_misses = Vec::new();
     for (name, kind, dir) in &specs {
         let rec = models::asr(kind, dir, threads, provider)?;
-        let (mut whole, mut cut) = (Score::default(), Score::default());
+        let mut rows: Vec<(String, Score)> = vec![
+            ("whole".into(), Score::default()),
+            ("vad".into(), Score::default()),
+        ];
+        for p in &prerolls {
+            rows.push((format!("vad+{p}s"), Score::default()));
+        }
         for t in &takes {
             let (h, d) = transcribe_samples(&rec, &t.whole);
-            whole.add(&t.reference, &h, d);
+            rows[0].1.add(&t.reference, &h, d);
             let (h, d) = t
                 .segment
                 .as_ref()
                 .map_or((String::new(), Duration::ZERO), |s| {
-                    transcribe_samples(&rec, s)
+                    transcribe_samples(&rec, &s.samples)
                 });
-            cut.add(&t.reference, &h, d);
+            rows[1].1.add(&t.reference, &h, d);
+            for (i, p) in prerolls.iter().enumerate() {
+                let (h, d) = t
+                    .segment
+                    .as_ref()
+                    .map_or((String::new(), Duration::ZERO), |s| {
+                        transcribe_samples(&rec, &padded(&t.whole, s, *p))
+                    });
+                rows[2 + i].1.add(&t.reference, &h, d);
+            }
         }
-        for (label, sc) in [("whole", &whole), ("vad", &cut)] {
+        for (label, sc) in &rows {
             println!(
-                "{:<10} {:<6} {:>6.1}% {:>5}/{:<3} {:>7.0} ms",
+                "{:<10} {:<9} {:>6.1}% {:>5}/{:<3} {:>7.0} ms",
                 name,
                 label,
                 sc.wer(),
@@ -310,19 +379,19 @@ pub fn run(a: &Args) -> Result<(), String> {
                 ms(sc.stt) / sc.takes.max(1) as f64
             );
         }
-        all_misses.push((name.clone(), whole.misses, cut.misses));
+        all_misses.push((name.clone(), rows));
     }
-    println!("\n\"whole\" = everything recorded; \"vad\" = what the voice detector cut out. If vad is much worse than whole, the detector is clipping the start or end of requests.");
+    println!("\n\"whole\" = everything recorded; \"vad\" = what the voice detector cut out; \"vad+0.3s\" = the same cut widened by 0.3 s before it (and 0.2 s after). If vad is much worse than whole, the detector clips the start or end of requests; the widened rows show how much padding fixes it.");
     if unheard > 0 {
         println!("The detector heard no speech in {unheard} take(s) (counted as empty text in the vad rows).");
     }
-    for (name, whole, cut) in all_misses {
-        for (label, misses) in [("whole", whole), ("vad", cut)] {
-            if misses.is_empty() {
+    for (name, rows) in all_misses {
+        for (label, sc) in rows.iter().take(2) {
+            if sc.misses.is_empty() {
                 continue;
             }
             println!("\n{name} / {label}: first mistakes");
-            for (r, h) in misses {
+            for (r, h) in &sc.misses {
                 println!("  said: {r:?}\n   got: {h:?}");
             }
         }
@@ -344,6 +413,38 @@ mod tests {
             w("Open, Chrome! What's up?"),
             ["open", "chrome", "what's", "up"]
         );
+    }
+
+    #[test]
+    fn spoken_digits_are_scored_as_digit_words() {
+        assert_eq!(
+            w("door code is 552."),
+            ["door", "code", "is", "five", "five", "two"]
+        );
+        assert_eq!(w("five five two"), w("552"));
+    }
+
+    #[test]
+    fn padding_widens_the_cut_and_stays_inside_the_recording() {
+        let whole: Vec<f32> = (0..64_000).map(|i| i as f32).collect();
+        let seg = Segment {
+            start: 16_000,
+            samples: whole[16_000..32_000].to_vec(),
+        };
+        let p = padded(&whole, &seg, 0.5);
+        assert_eq!(p.len(), 8_000 + 16_000 + 3_200);
+        assert_eq!(p[0], 8_000.0);
+        // Near the start there is less than the requested pre-roll; near the end, no tail.
+        let early = Segment {
+            start: 1_000,
+            samples: whole[1_000..2_000].to_vec(),
+        };
+        assert_eq!(padded(&whole, &early, 0.5)[0], 0.0);
+        let late = Segment {
+            start: 63_000,
+            samples: whole[63_000..64_000].to_vec(),
+        };
+        assert_eq!(padded(&whole, &late, 0.1).last(), Some(&63_999.0));
     }
 
     #[test]
