@@ -61,6 +61,24 @@ Wake-word phrase file (`keywords.txt`, one line per phrase, tokens are the model
   --text "Good evening, sir. Shall I open Chrome?"
 ```
 
+## Benchmark: which speech-to-text model is best for you
+
+```powershell
+.\voice-cli.exe bench --vad models\silero_vad.onnx --threads 4 `
+  --models "tiny=moonshine:models\sherpa-onnx-moonshine-tiny-en-int8,whisper=whisper:models\sherpa-onnx-whisper-base.en"
+```
+
+You get 30 command phrases, one at a time: press Enter, say the phrase clearly, and wait for
+"recorded". Use `--count 10` for a shorter run. Audio is kept in memory only. Afterwards every
+model decodes the **same** recordings and the program prints one table: word error rate (WER,
+lower is better), phrases fully right, and average decode time. Each model appears twice:
+
+- **whole**: everything you recorded. This shows how well the model understands you.
+- **vad**: only the piece the voice detector cut out. If this is much worse than **whole**, the
+  detector is clipping the start or end of your requests (the spec's 2 s pre-roll buffer is the fix).
+
+No microphone? `--wav-list FILE` takes lines like `C:\clips\a.wav|open chrome` instead.
+
 ## What to paste back (issue #14 or the S1 report)
 
 1. Your laptop model, CPU, RAM, Windows version, microphone and speakers.
@@ -72,9 +90,10 @@ Wake-word phrase file (`keywords.txt`, one line per phrase, tokens are the model
 4. `wake` for 2 minutes **silent** (false triggers), then saying "Jarvis" / "hey Jarvis" 10 times
    at normal and far distance (hits out of 10). Note the "busy %" line and, in Task Manager, the
    program's CPU % and memory.
-5. `say`: the time to first sound and the real-time factor per voice id; which id sounds like
+5. `bench`: the whole table plus the list of first mistakes.
+6. `say`: the time to first sound and the real-time factor per voice id; which id sounds like
    the British male voice (24 `bm_daniel`, 25 `bm_fable`, 26 `bm_george`, 27 `bm_lewis` in Kokoro **v1.0**; the v1.1 model has only three English voices and the rest are Chinese, so use v1.0). Try `--threads 2` and `--threads 4` and compare the first-sentence time..
-6. Anything that crashed or sounded wrong.
+7. Anything that crashed or sounded wrong.
 
 ## What this spike does NOT do
 
