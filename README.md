@@ -37,6 +37,28 @@ pnpm tauri dev
 
 The app opens with no key. Open settings, paste an Anthropic API key, and choose a model.
 
+### Shortcuts: `jarvis` and `jarvis-mock` (macOS and Linux)
+
+Run this once from the repository folder:
+
+```bash
+scripts/install-shortcuts.sh
+```
+
+Then open a new Terminal window and, from any folder, type:
+
+| Command       | Starts                                                            |
+| ------------- | ----------------------------------------------------------------- |
+| `jarvis`      | the real app (needs your API key in Settings)                     |
+| `jarvis-mock` | the mock backend: fake replies, scenario buttons and a MOCK badge |
+
+Before starting, each one updates the checkout, but only when that is safe: on `main` with no
+local changes, fast-forward only. On another branch, or with local changes, it leaves things alone
+and says so. Set `JARVIS_NO_UPDATE=1` to skip the update. To remove the commands, run
+`scripts/install-shortcuts.sh --uninstall`. An old `alias jarvis=…` line in your shell startup file
+would take priority over the command; the installer tells you if it finds one. There is no
+Windows version yet. `scripts/test-shortcuts.sh` checks the scripts without starting the app.
+
 ## Check your changes
 
 ```bash

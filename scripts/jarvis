@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Starts JARVIS from source. Installed as two commands by scripts/install-shortcuts.sh:
+#   jarvis        the real app (needs your API key in Settings)
+#   jarvis-mock   the mock backend: fake replies, scenario buttons and a MOCK badge
+#
+# It works from any folder. Before starting it brings the checkout up to date, but only when
+# that is safe: on `main` with no local changes (fast-forward only). Otherwise it leaves your
+# branch alone and says so. Set JARVIS_NO_UPDATE=1 to skip the update entirely.
+set -euo pipefail
+
+# Which command was typed (the name of the symlink, before it is resolved).
+name="$(basename "${BASH_SOURCE[0]}")"
+
+# Find the repository through any chain of symlinks (portable: no `readlink -f`).
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+repo="$(cd -P "$(dirname "$src")/.." && pwd)"
+
+cd "$repo"
+
+# Rust installed with rustup is often only on PATH in interactive shells.
+if ! command -v cargo >/dev/null 2>&1 && [ -f "$HOME/.cargo/env" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.cargo/env"
+fi
+for tool in pnpm cargo git; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "jarvis: '$tool' was not found. See 'Run it from source' in README.md." >&2
+    exit 1
+  }
+done
+
+if [ "${JARVIS_NO_UPDATE:-}" = "1" ]; then
+  echo "jarvis: not updating (JARVIS_NO_UPDATE=1)."
+else
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$branch" != "main" ]; then
+    echo "jarvis: on branch '$branch', not 'main': not updating."
+  elif [ -n "$(git status --porcelain)" ]; then
+    echo "jarvis: you have local changes: not updating."
+  elif git pull --quiet --ff-only; then
+    echo "jarvis: up to date with main."
+  else
+    echo "jarvis: could not update (offline?). Starting what you have."
+  fi
+fi
+
+pnpm install --silent
+
+case "$name" in
+  jarvis-mock)
+    echo "jarvis: starting the MOCK app (fake replies, MOCK badge)."
+    exec env VITE_TRANSPORT=mock pnpm tauri dev
+    ;;
+  *)
+    echo "jarvis: starting JARVIS."
+    exec pnpm tauri dev
+    ;;
+esac
