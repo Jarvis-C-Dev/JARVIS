@@ -106,7 +106,7 @@ pub fn kws(
 
 /// Kokoro in lexicon mode (sherpa-onnx 2.x no longer uses espeak-ng; the language comes from
 /// the lexicon files). An `espeak-ng-data` folder (GPL-3.0) is deliberately never passed.
-pub fn tts(dir: &Path) -> Result<OfflineTts, String> {
+pub fn tts(dir: &Path, threads: i32) -> Result<OfflineTts, String> {
     let mut lexicons: Vec<String> = std::fs::read_dir(dir)
         .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -126,7 +126,7 @@ pub fn tts(dir: &Path) -> Result<OfflineTts, String> {
     cfg.model.kokoro.voices = Some(pick(dir, &["voices"], &[], ".bin")?);
     cfg.model.kokoro.tokens = Some(pick(dir, &["tokens"], &[], ".txt")?);
     cfg.model.kokoro.lexicon = Some(lexicons.join(","));
-    cfg.model.num_threads = 2;
+    cfg.model.num_threads = threads;
     OfflineTts::create(&cfg)
         .ok_or_else(|| format!("cannot load the voice model in {}", dir.display()))
 }
