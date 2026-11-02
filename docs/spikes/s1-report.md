@@ -63,7 +63,10 @@ Chinese voice. A first run on W1 with ids 24 to 27 on v1.1 sounded like Chinese 
 | Speaker start delay after `play()` | W1: 120 to 350 ms |
 | Generation slower than playback (RTF above 1) | Gaps between sentences in a long reply unless generation is overlapped with playback or made faster |
 | Listening test, Kokoro v1.0 on W1 | Owner shortlists `bm_daniel` (24) and `bm_george` (26) as good; no blind audition yet |
-| Effect of more threads, shorter first chunk, or a smaller voice model | **Not measured yet** (`--threads` added to the spike) |
+| Threads on W1 (Kokoro v1.0, `bm_daniel`), first sentence of 1.4 s of speech | 2 threads: 1.5 to 1.8 s (RTF 1.0 to 1.25). **4 threads: 1.37 to 1.50 s (RTF 0.88 to 0.97), the best.** 6 threads: 1.44 s (RTF 1.0 to 1.1). 8 threads: 1.58 s (RTF 1.1). More than 4 does not help |
+| Estimated end of speech to first audio, local intent, W1 CPU | about 0.76 s (speech to text) + 1.4 s (first voice sentence) + 0.2 s (speaker start) = about 2.4 s, against the advisory 1.5 s limit (see D-21) |
+| Playback bug found by the owner | The last word was cut ("Chrome" heard as "chro"): the spike's player stopped before the device buffer drained. Fixed with trailing silence; not a voice problem |
+| Effect of a shorter first chunk, a smaller voice model, or the GPU (`--provider`) | **Not measured yet** |
 | Out-of-vocabulary names in lexicon-only mode | **Not measured** (judge by ear with a name list) |
 | Blind audition, 5 listeners | **Not done** |
 

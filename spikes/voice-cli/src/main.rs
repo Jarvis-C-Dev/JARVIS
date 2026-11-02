@@ -3,6 +3,7 @@
 //! the numbers it prints are the point (spec §15, S1 report).
 
 mod audio;
+mod bench;
 mod models;
 
 use sherpa_onnx::{GenerationConfig, LinearResampler, Wave};
@@ -20,6 +21,10 @@ voice-cli <command> [--flag value ...]
              [--seconds 60] [--device NAME] [--silence 0.7] [--threads 2] [--provider cpu]
   wake       --kws-dir DIR --keywords FILE [--seconds 120] [--threshold 0.25]
              [--score 1.0] [--device NAME]    (or --wav FILE instead of the microphone)
+  bench      --vad SILERO.onnx --models NAME=KIND:DIR[,NAME=KIND:DIR...]
+             [--count 30] [--window 7] [--threads 4] [--device NAME]
+             (or --wav-list FILE with lines like path.wav|what was said)
+             you read 30 phrases; every model decodes the same audio; prints WER
   say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--provider cpu] [--no-play]
              (ids are for Kokoro v1.0: 24 bm_daniel, 25 bm_fable, 26 bm_george, 27 bm_lewis)
 ";
@@ -374,14 +379,16 @@ fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let result = match argv.first().map(String::as_str) {
         Some("devices") => audio::list_devices(),
-        Some(cmd @ ("mic" | "transcribe" | "listen" | "wake" | "say")) => Args::parse(&argv[1..])
-            .and_then(|a| match cmd {
+        Some(cmd @ ("mic" | "transcribe" | "listen" | "wake" | "say" | "bench")) => {
+            Args::parse(&argv[1..]).and_then(|a| match cmd {
                 "mic" => cmd_mic(&a),
                 "transcribe" => cmd_transcribe(&a),
                 "listen" => cmd_listen(&a),
                 "wake" => cmd_wake(&a),
+                "bench" => bench::run(&a),
                 _ => cmd_say(&a),
-            }),
+            })
+        }
         _ => Err(USAGE.into()),
     };
     if let Err(e) = result {
