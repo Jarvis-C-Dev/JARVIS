@@ -79,6 +79,37 @@ lower is better), phrases fully right, and average decode time. Each model appea
 
 No microphone? `--wav-list FILE` takes lines like `C:\clips\a.wav|open chrome` instead.
 
+## Wake-word benchmark: finding a setting that hears "Jarvis"
+
+The wake-word model learns your phrase from its spelling, and "Jarvis" is an unusual word for it, so at
+the default sensitivity it may never fire. This tries many sensitivity settings on the **same**
+recordings. Make the phrase file with several spellings of the name (`_` stands for the piece-start mark
+`▁`, which the commands below put back):
+
+```powershell
+$u = [string][char]0x2581
+$text = @'
+_JA R VI S @jarvis
+_JA R V IS @jarvis
+_ J AR VI S @jarvis
+_JE R VI S @jarvis
+_HE Y _JA R VI S @hey_jarvis
+_HE Y _JA R V IS @hey_jarvis
+_HE Y _ J AR VI S @hey_jarvis
+_HE Y _JE R VI S @hey_jarvis
+'@
+[IO.File]::WriteAllText("$PWD\keywords.txt", $text.Replace("`r", "").Replace('_', $u), (New-Object Text.UTF8Encoding $false))
+
+.\voice-cli.exe wake-bench --kws-dir models\sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 --keywords keywords.txt
+```
+
+Part 1: ten short recordings (press Enter, then say "Jarvis" or "hey Jarvis" as asked). Part 2: one
+minute of ordinary background (talk about something else, play a video), no wake word. Then one table:
+for each threshold and score, how many of the takes it found and how many times it fired by mistake in
+the background minute. Lower threshold and higher score make it more sensitive: more real hits, but
+more false triggers. Audio is kept in memory only. Without a microphone: `--pos-wav A.wav,B.wav
+--neg-wav C.wav`.
+
 ## What to paste back (issue #14 or the S1 report)
 
 1. Your laptop model, CPU, RAM, Windows version, microphone and speakers.

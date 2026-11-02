@@ -5,6 +5,7 @@
 mod audio;
 mod bench;
 mod models;
+mod wakebench;
 
 use sherpa_onnx::{GenerationConfig, LinearResampler, Wave};
 use std::collections::HashMap;
@@ -25,6 +26,10 @@ voice-cli <command> [--flag value ...]
              [--count 30] [--window 7] [--threads 4] [--preroll 0.3,0.6] [--device NAME]
              (or --wav-list FILE with lines like path.wav|what was said)
              you read 30 phrases; every model decodes the same audio; prints WER
+  wake-bench --kws-dir DIR --keywords FILE [--takes 10] [--neg-seconds 60]
+             [--thresholds 0.25,0.15,0.1,0.05,0.02] [--scores 1,2,3,4] [--device NAME]
+             you say the phrase 10 times and make 60 s of background noise once; every
+             sensitivity setting is tried on the same audio (or --pos-wav A.wav,B.wav --neg-wav C.wav)
   say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--provider cpu] [--no-play]
              (ids are for Kokoro v1.0: 24 bm_daniel, 25 bm_fable, 26 bm_george, 27 bm_lewis)
 ";
@@ -379,13 +384,14 @@ fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let result = match argv.first().map(String::as_str) {
         Some("devices") => audio::list_devices(),
-        Some(cmd @ ("mic" | "transcribe" | "listen" | "wake" | "say" | "bench")) => {
+        Some(cmd @ ("mic" | "transcribe" | "listen" | "wake" | "say" | "bench" | "wake-bench")) => {
             Args::parse(&argv[1..]).and_then(|a| match cmd {
                 "mic" => cmd_mic(&a),
                 "transcribe" => cmd_transcribe(&a),
                 "listen" => cmd_listen(&a),
                 "wake" => cmd_wake(&a),
                 "bench" => bench::run(&a),
+                "wake-bench" => wakebench::run(&a),
                 _ => cmd_say(&a),
             })
         }
