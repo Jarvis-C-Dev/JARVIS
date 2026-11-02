@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Windows batch files need Windows line endings, whatever the checkout settings
+*.cmd text eol=crlf

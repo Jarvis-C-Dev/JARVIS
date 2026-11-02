@@ -49,3 +49,9 @@ jobs:
         run: |
           pnpm gen:types
           git diff --exit-code src/types/generated
+      - name: Shortcut scripts (Linux)
+        if: runner.os == 'Linux'
+        run: bash scripts/test-shortcuts.sh
+      - name: Shortcut scripts (Windows)
+        if: runner.os == 'Windows'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-shortcuts.ps1

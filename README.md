@@ -37,15 +37,23 @@ pnpm tauri dev
 
 The app opens with no key. Open settings, paste an Anthropic API key, and choose a model.
 
-### Shortcuts: `jarvis` and `jarvis-mock` (macOS and Linux)
+### Shortcuts: `jarvis` and `jarvis-mock`
 
-Run this once from the repository folder:
+Run this once from the repository folder.
+
+macOS and Linux:
 
 ```bash
 scripts/install-shortcuts.sh
 ```
 
-Then open a new Terminal window and, from any folder, type:
+Windows (PowerShell or Command Prompt):
+
+```bat
+scripts\install-shortcuts.cmd
+```
+
+Then open a new terminal window and, from any folder, type:
 
 | Command       | Starts                                                            |
 | ------------- | ----------------------------------------------------------------- |
@@ -55,9 +63,12 @@ Then open a new Terminal window and, from any folder, type:
 Before starting, each one updates the checkout, but only when that is safe: on `main` with no
 local changes, fast-forward only. On another branch, or with local changes, it leaves things alone
 and says so. Set `JARVIS_NO_UPDATE=1` to skip the update. To remove the commands, run
-`scripts/install-shortcuts.sh --uninstall`. An old `alias jarvis=…` line in your shell startup file
-would take priority over the command; the installer tells you if it finds one. There is no
-Windows version yet. `scripts/test-shortcuts.sh` checks the scripts without starting the app.
+`scripts/install-shortcuts.sh --uninstall` (Windows: `scripts\install-shortcuts.cmd -Uninstall`). An old `alias jarvis=…` line in your shell startup file
+would take priority over the command; the installer tells you if it finds one. On Windows the
+installer writes two small `.cmd` files into `%USERPROFILE%\.local\bin` and adds that folder to your
+(user) PATH; it needs no change to PowerShell's script policy and refuses to overwrite a file it did not
+write. `scripts/test-shortcuts.sh` and `scripts/test-shortcuts.ps1` check the scripts without starting
+the app.
 
 ## Check your changes
 
