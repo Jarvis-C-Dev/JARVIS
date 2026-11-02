@@ -47,10 +47,11 @@ macOS and Linux:
 scripts/install-shortcuts.sh
 ```
 
-Windows (PowerShell or Command Prompt):
+Windows (PowerShell or Command Prompt, from the repository folder; use a normal window, not
+"Run as administrator"):
 
 ```bat
-scripts\install-shortcuts.cmd
+.\scripts\install-shortcuts.cmd
 ```
 
 Then open a new terminal window and, from any folder, type:
@@ -63,7 +64,7 @@ Then open a new terminal window and, from any folder, type:
 Before starting, each one updates the checkout, but only when that is safe: on `main` with no
 local changes, fast-forward only. On another branch, or with local changes, it leaves things alone
 and says so. Set `JARVIS_NO_UPDATE=1` to skip the update. To remove the commands, run
-`scripts/install-shortcuts.sh --uninstall` (Windows: `scripts\install-shortcuts.cmd -Uninstall`). An old `alias jarvis=…` line in your shell startup file
+`scripts/install-shortcuts.sh --uninstall` (Windows: `.\scripts\install-shortcuts.cmd -Uninstall`). An old `alias jarvis=…` line in your shell startup file
 would take priority over the command; the installer tells you if it finds one. On Windows the
 installer writes two small `.cmd` files into `%USERPROFILE%\.local\bin` and adds that folder to your
 (user) PATH; it needs no change to PowerShell's script policy and refuses to overwrite a file it did not

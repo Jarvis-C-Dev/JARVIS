@@ -1,6 +1,6 @@
 # Installs the `jarvis` and `jarvis-mock` commands on Windows.
-#   scripts\install-shortcuts.cmd              install
-#   scripts\install-shortcuts.cmd -Uninstall   remove
+#   .\scripts\install-shortcuts.cmd              install
+#   .\scripts\install-shortcuts.cmd -Uninstall   remove
 #
 # It writes two small .cmd files into %USERPROFILE%\.local\bin that call scripts\jarvis.cmd in this
 # checkout, and adds that folder to YOUR PATH (the user-level one, never the system one) if it is not
