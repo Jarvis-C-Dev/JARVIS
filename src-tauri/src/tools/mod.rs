@@ -12,6 +12,7 @@ pub mod adapters;
 pub mod apps;
 pub mod files;
 pub mod memory;
+pub mod music;
 pub mod ports;
 pub mod status;
 pub mod timenow;
@@ -165,6 +166,8 @@ impl Registry {
         r.register(Arc::new(apps::AppsLaunch));
         r.register(Arc::new(status::SystemStatusTool));
         r.register(Arc::new(memory::MemoryPropose));
+        r.register(Arc::new(music::MusicControl));
+        r.register(Arc::new(music::MusicNowPlaying));
         r
     }
 

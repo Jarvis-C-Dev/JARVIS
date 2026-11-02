@@ -477,6 +477,8 @@ The model can only propose; the gateway decides from static policy, validated ar
 | `files.read_text` | Medium | Allowed roots; text types; ≤ 1 MB; approval says the content will be sent to the cloud provider |
 | `files.move` / `files.rename` | Medium | Source and destination both inside allowed roots; no overwrite |
 | `memory.propose` | Low | Creates a `proposed` memory only |
+| `music.control` | Low | Play (resume), pause, next, previous, volume up or down, mute, through the operating system's media session (Windows first); a fixed list of actions, no song choice, no network |
+| `music.now_playing` | Low | Title, artist and play state of the current media session; the names come from the playing app, so the result is untrusted outside content and sets the taint flag |
 
 Not in alpha: delete, shell, scripts, installers, messaging, purchases, settings changes, browser automation.
 

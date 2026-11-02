@@ -7,6 +7,7 @@ What does not work yet, and what to expect. Updated with the code; if you find s
 - **Apps and files**: it can open apps you allowed, but it cannot close them or pass them files. It reads **plain
   text** files only (not Word, PDF or spreadsheets), up to 1 MB. It cannot delete files, and never overwrites
   one when moving or renaming.
+- **Music**: pause, play, next, previous, volume, mute and "what's playing" work on **Windows only** for now (other systems say they are not available). They act on whatever Windows treats as the current media session, so if a browser tab played sound most recently, that is what pauses. It cannot choose or search for a song yet ("play Bohemian Rhapsody" goes to the chat model, which cannot start it). Volume moves about 10% per command, and "mute the music" toggles.
 - **Time**: it knows UTC and does not know your time zone on its own.
 - **Network state**: the status area shows "Network unknown"; it is only detected when a request fails.
 - **Activity log** is kept in memory and is empty after a restart.

@@ -626,6 +626,24 @@ fn tooled_full(
     has_key: bool,
     apps: Vec<crate::ipc::types::AllowedApp>,
 ) -> (Tooled, Arc<Fake>) {
+    tooled_media(
+        fake,
+        auto_medium,
+        caps,
+        has_key,
+        apps,
+        Arc::new(crate::tools::ports::NoMedia),
+    )
+}
+
+fn tooled_media(
+    fake: impl FnOnce(&std::path::Path) -> Arc<Fake>,
+    auto_medium: bool,
+    caps: Caps,
+    has_key: bool,
+    apps: Vec<crate::ipc::types::AllowedApp>,
+    media: Arc<dyn crate::tools::ports::MediaControl>,
+) -> (Tooled, Arc<Fake>) {
     let root = std::env::temp_dir().join(format!("jarvis-turn-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&root).unwrap();
     let root = std::fs::canonicalize(root).unwrap();
@@ -652,6 +670,7 @@ fn tooled_full(
             apps: apps.clone(),
             ports: Arc::new(crate::tools::ports::Ports {
                 memory: in_ctx.clone(),
+                media: media.clone(),
                 ..crate::tools::ports::Ports::placeholders()
             }),
         }),
@@ -1543,4 +1562,130 @@ async fn the_persona_describes_the_tools_and_how_to_handle_remember_requests() {
     // The old line that said it could only chat is gone.
     assert!(!system.contains("only chat"), "{system}");
     assert!(!system.contains("cannot yet open apps"), "{system}");
+}
+
+// ----------------------------------------------------------------------------- music commands
+
+use crate::tools::ports::{MediaAction, MediaControl, MediaError, NowPlaying};
+
+struct FakeMedia {
+    acts: Mutex<Vec<MediaAction>>,
+    now: Option<NowPlaying>,
+}
+impl FakeMedia {
+    fn new(now: Option<NowPlaying>) -> Arc<Self> {
+        Arc::new(Self {
+            acts: Mutex::new(vec![]),
+            now,
+        })
+    }
+}
+impl MediaControl for FakeMedia {
+    fn act(&self, a: MediaAction) -> Result<(), MediaError> {
+        lock(&self.acts).push(a);
+        Ok(())
+    }
+    fn now_playing(&self) -> Result<Option<NowPlaying>, MediaError> {
+        Ok(self.now.clone())
+    }
+}
+
+async fn ask_fresh(t: &Tooled, q: &str) -> Arc<Rec> {
+    let sink = Arc::new(Rec::default());
+    t.r.start(q.into(), sink.clone()).unwrap();
+    sink.wait_done().await;
+    sink
+}
+
+#[tokio::test]
+async fn transport_commands_run_locally_through_the_gateway_even_with_a_key() {
+    let media = FakeMedia::new(None);
+    let (t, fake) = tooled_media(
+        no_script,
+        false,
+        Caps::default(),
+        true,
+        vec![],
+        media.clone(),
+    );
+    for (q, reply) in [
+        ("pause the music", "Paused."),
+        ("Hey Jarvis, skip this song", "Skipped to the next track."),
+        ("volume up", "Turned the volume up."),
+        ("resume", "Resumed."),
+    ] {
+        let s = ask_fresh(&t, q).await;
+        assert_eq!(s.text(), reply, "{q}");
+        assert_eq!(s.dones(), vec![StopReason::End], "{q}");
+    }
+    assert_eq!(
+        *lock(&media.acts),
+        vec![
+            MediaAction::Pause,
+            MediaAction::Next,
+            MediaAction::VolumeUp,
+            MediaAction::Play
+        ]
+    );
+    assert_eq!(
+        *lock(&fake.calls),
+        0,
+        "the model was never called, so it cost nothing"
+    );
+    let entries = lock(&t.sink.activity).len();
+    let _ = entries; // the first turn used its own sink; the audit log is checked below
+    let log = t.r.tools.as_ref().unwrap().activity.list(10, None);
+    assert_eq!(log.len(), 4);
+    assert!(log.iter().all(|e| e.tool == "music.control"));
+    assert!(log.iter().all(|e| e.decision == ToolDecision::AutoAllowed));
+}
+
+#[tokio::test]
+async fn whats_playing_is_answered_locally_and_taints_the_context() {
+    let media = FakeMedia::new(Some(NowPlaying {
+        title: "Bohemian Rhapsody".into(),
+        artist: "Queen".into(),
+        playing: true,
+    }));
+    let (t, fake) = tooled_media(no_script, true, Caps::default(), false, vec![], media);
+    let s = ask_fresh(&t, "what's playing?").await;
+    assert_eq!(
+        s.text(),
+        "Now playing: Bohemian Rhapsody by Queen (playing)."
+    );
+    assert!(
+        t.gateway.is_tainted(),
+        "a track name is outside content, so later medium actions ask again"
+    );
+    assert_eq!(*lock(&fake.calls), 0);
+}
+
+#[tokio::test]
+async fn without_a_media_adapter_the_reply_says_so_and_the_model_is_not_asked() {
+    let (t, fake) = tooled_full(no_script, false, Caps::default(), true, vec![]);
+    let s = ask_fresh(&t, "pause").await;
+    assert!(
+        s.text().contains("not available on this computer"),
+        "{}",
+        s.text()
+    );
+    assert_eq!(s.dones(), vec![StopReason::End]);
+    assert_eq!(*lock(&fake.calls), 0);
+}
+
+#[tokio::test]
+async fn sentences_that_only_mention_music_words_still_go_to_the_model() {
+    let media = FakeMedia::new(None);
+    let (t, fake) = tooled_media(
+        no_script,
+        false,
+        Caps::default(),
+        true,
+        vec![],
+        media.clone(),
+    );
+    let s = ask_fresh(&t, "play me something by the Beatles").await;
+    assert_eq!(s.text(), "cloud");
+    assert_eq!(*lock(&fake.calls), 1);
+    assert!(lock(&media.acts).is_empty());
 }

@@ -309,6 +309,15 @@ impl TurnRunner {
             };
             return self.finish_text(id, &reply, sink);
         }
+        // Transport commands ("pause", "next song", "volume up", "what's playing") are quick
+        // actions, not conversation: they go straight through the tools and the permission
+        // gateway, online or not, with no model round trip. If tools are not wired they fall
+        // through to the model as before.
+        if let Some(i @ (Intent::Music(_) | Intent::NowPlaying)) = intents::route(&text)
+            && self.answer_with_tools(id, &i, &cancel, sink).await
+        {
+            return;
+        }
         // Questions the tools can answer (time, status, open an app, find a file) are answered
         // here, with no model, whenever the cloud cannot be used: the spend cap is reached,
         // there is no key, or the network is down.
@@ -550,7 +559,7 @@ impl TurnRunner {
 
     fn local_reply(&self, intent: &Intent) -> String {
         match intent {
-            Intent::WhatCanYouDo => "I can chat, handle quick commands such as stop and mute, open apps you allow, check system status, and work with files in the folders you allow (reading and moving ask you first). Voice is not built yet.".into(),
+            Intent::WhatCanYouDo => "I can chat, handle quick commands such as stop and mute, open apps you allow, check system status, pause and skip music, and work with files in the folders you allow (reading and moving ask you first). Voice is not built yet.".into(),
             Intent::RepeatLast => lock(&self.last_reply)
                 .clone()
                 .unwrap_or_else(|| "I haven't said anything yet.".into()),
