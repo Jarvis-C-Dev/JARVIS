@@ -21,13 +21,17 @@ Or build it: `cd spikes/voice-cli && cargo build --release` (needs Rust; Linux a
 
 ## Get the models (Windows PowerShell; macOS/Linux: same URLs with `curl -LO` and `tar xjf`)
 
+Windows tip: if `curl.exe` fails with a `schannel` / `SEC_E_INVALID_TOKEN` error, use
+`[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` and
+`Invoke-WebRequest <url> -OutFile <file>`, or `Start-BitsTransfer`. Never turn off certificate checks.
+
 ```powershell
 mkdir models; cd models
 $b = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
 curl.exe -LO "$b/asr-models/silero_vad.onnx"
 curl.exe -LO "$b/asr-models/sherpa-onnx-moonshine-tiny-en-int8.tar.bz2"
 curl.exe -LO "$b/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
-curl.exe -LO "$b/tts-models/kokoro-int8-multi-lang-v1_1.tar.bz2"
+curl.exe -LO "$b/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2"
 Get-ChildItem *.bz2 | ForEach-Object { tar xjf $_.Name }
 ```
 
@@ -53,7 +57,7 @@ Wake-word phrase file (`keywords.txt`, one line per phrase, tokens are the model
   --asr-dir models\sherpa-onnx-moonshine-tiny-en-int8 --seconds 60
 .\voice-cli.exe wake --kws-dir models\sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 `
   --keywords keywords.txt --seconds 120
-.\voice-cli.exe say --tts-dir models\kokoro --sid 24,25,26,27 `
+.\voice-cli.exe say --tts-dir models\kokoro --sid 24,26 --threads 4 `
   --text "Good evening, sir. Shall I open Chrome?"
 ```
 
@@ -69,7 +73,7 @@ Wake-word phrase file (`keywords.txt`, one line per phrase, tokens are the model
    at normal and far distance (hits out of 10). Note the "busy %" line and, in Task Manager, the
    program's CPU % and memory.
 5. `say`: the time to first sound and the real-time factor per voice id; which id sounds like
-   the British male voice (the ids differ between Kokoro versions).
+   the British male voice (24 `bm_daniel`, 25 `bm_fable`, 26 `bm_george`, 27 `bm_lewis` in Kokoro **v1.0**; the v1.1 model has only three English voices and the rest are Chinese, so use v1.0). Try `--threads 2` and `--threads 4` and compare the first-sentence time..
 6. Anything that crashed or sounded wrong.
 
 ## What this spike does NOT do

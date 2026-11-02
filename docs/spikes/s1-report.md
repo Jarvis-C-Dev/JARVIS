@@ -51,13 +51,20 @@ Model licence: card says Apache-2.0; trained on GigaSpeech data. Check before sh
 
 ## Text to speech (D-03): Kokoro-82M int8 in lexicon-only mode
 
+Use the **v1.0** package (`kokoro-int8-multi-lang-v1_0`, 54 speaker ids). The v1.1 package has
+only three English voices (ids 0 to 2: `af_maple`, `af_sol`, `bf_vale`); every other id is a
+Chinese voice. A first run on W1 with ids 24 to 27 on v1.1 sounded like Chinese women for that reason.
+
 | Check | Result |
 | --- | --- |
-| Loads and speaks without espeak-ng (sherpa-onnx 2.x) | Yes (C1) |
-| Real-time factor | 1.1 to 1.7 on C1 (2.1 GHz Xeon). **Not measured on W1** |
-| Time to first sound, first sentence | 1.7 to 2.6 s on C1. **Not measured on W1** |
-| Which speaker id is the British male voice (`bm_george`/`bm_lewis`) | **Not measured** (103 ids in this build; mapping differs between Kokoro versions) |
-| Out-of-vocabulary names in lexicon-only mode | **Not measured** (names such as "Mumbai" rendered, quality not judged) |
+| Loads and speaks without espeak-ng (sherpa-onnx 2.x) | Yes (C1 and W1) |
+| Real-time factor, 2 threads, v1.1 (same model size) | W1: 1.1 to 1.6. C1: 1.1 to 1.7 |
+| Time to generate the first sentence, 2 threads (1.4 to 1.5 s of speech) | W1: 1.6 to 2.4 s. §10 "end of speech to first audio, local intent": hard 1.5 s, target 0.8 s. **Not met as configured** |
+| Speaker start delay after `play()` | W1: 120 to 350 ms |
+| Generation slower than playback (RTF above 1) | Gaps between sentences in a long reply unless generation is overlapped with playback or made faster |
+| Listening test, Kokoro v1.0 on W1 | Owner shortlists `bm_daniel` (24) and `bm_george` (26) as good; no blind audition yet |
+| Effect of more threads, shorter first chunk, or a smaller voice model | **Not measured yet** (`--threads` added to the spike) |
+| Out-of-vocabulary names in lexicon-only mode | **Not measured** (judge by ear with a name list) |
 | Blind audition, 5 listeners | **Not done** |
 
 ## Echo and interruption (D-05)

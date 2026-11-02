@@ -20,8 +20,8 @@ voice-cli <command> [--flag value ...]
              [--seconds 60] [--device NAME] [--silence 0.7]
   wake       --kws-dir DIR --keywords FILE [--seconds 120] [--threshold 0.25]
              [--score 1.0] [--device NAME]    (or --wav FILE instead of the microphone)
-  say        --tts-dir DIR --text TEXT [--sid 24,25,26,27] [--speed 1.0] [--no-play]
-             (speaker ids differ between Kokoro versions: listen and pick)
+  say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--no-play]
+             (ids are for Kokoro v1.0: 24 bm_daniel, 25 bm_fable, 26 bm_george, 27 bm_lewis)
 ";
 
 struct Args(HashMap<String, String>);
@@ -302,7 +302,7 @@ fn split_sentences(text: &str) -> Vec<String> {
 
 fn cmd_say(a: &Args) -> Result<(), String> {
     let t0 = Instant::now();
-    let tts = models::tts(&PathBuf::from(a.need("tts-dir")?))?;
+    let tts = models::tts(&PathBuf::from(a.need("tts-dir")?), a.num("threads", 2)?)?;
     println!(
         "voice loaded in {:.0} ms ({} speaker id(s), {} Hz)",
         ms(t0.elapsed()),
