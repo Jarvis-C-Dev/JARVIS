@@ -205,13 +205,19 @@ fn record_take(
     (whole, segment)
 }
 
-fn take_from_wav(path: &str, reference: &str, vad: &VoiceActivityDetector) -> Result<Take, String> {
+/// A WAV file as 16 kHz mono samples.
+pub fn wav_16k(path: &str) -> Result<Vec<f32>, String> {
     let wav = Wave::read(path).ok_or_else(|| format!("cannot read {path}"))?;
     let mut samples = wav.samples().to_vec();
     if wav.sample_rate() != audio::STT_RATE {
         let rs = LinearResampler::create(wav.sample_rate(), audio::STT_RATE).ok_or("resampler")?;
         samples = rs.resample(&samples, true);
     }
+    Ok(samples)
+}
+
+fn take_from_wav(path: &str, reference: &str, vad: &VoiceActivityDetector) -> Result<Take, String> {
+    let samples = wav_16k(path)?;
     vad.reset();
     let mut segment = None;
     for chunk in samples.chunks(1600) {
