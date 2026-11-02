@@ -138,7 +138,7 @@ impl Detector {
             let input: Vec<f32> = self.raw.iter().map(|s| s * 32767.0).collect();
             let n = input.len() as i64;
             let mel = run(&mut self.mel, vec![1, n], input)?;
-            for f in mel.chunks_exact(MEL_BANDS) {
+            for f in mel.as_chunks::<MEL_BANDS>().0 {
                 let mut row = [0.0f32; MEL_BANDS];
                 for (r, v) in row.iter_mut().zip(f) {
                     *r = v / 10.0 + 2.0;
