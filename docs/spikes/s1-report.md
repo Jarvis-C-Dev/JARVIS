@@ -79,16 +79,46 @@ Still to do: run `bench` with the widened rows on W1 and pick the amount.
 
 Open: WER on 100 command utterances in a quiet room, at 0.5 m and 1 m (needs the corpus, task A-09).
 
-## Wake word (D-02): sherpa-onnx open-vocabulary KWS (zipformer 3.3M, GigaSpeech)
+## Wake word (D-02): sherpa-onnx open-vocabulary keyword spotter (zipformer 3.3M, GigaSpeech)
 
-| Check | Result |
+Phrase file: several spellings of "Jarvis" and "hey Jarvis" in the model's own pieces, made from its
+tokenizer (including "Jervis" for accent variation). Model card says Apache-2.0; trained on GigaSpeech
+data. Tool: `wake` and `wake-bench` in `spikes/voice-cli`.
+
+| Run (W1, owner's voice) | Result |
 | --- | --- |
-| Detects a test phrase in a sample WAV (C1) | Yes ("light up", 7.1 s of audio decoded in 192 ms) |
-| "hey jarvis" false accepts per hour, false rejects at 1 m and 3 m | **Not measured** |
-| CPU and RAM in standby on W1 | **Not measured** |
+| Sample WAV, a phrase the model was shipped with ("light up") | Found; 7.1 s of audio decoded in 192 ms (C1) |
+| Default settings (threshold 0.25, score 1), 120 s of room noise, laptop mic | 0 detections; memory flat at 42 to 43 MB; decode load 3.0% of one thread |
+| `wake-bench`, **Bluetooth earbuds as the default microphone**, 10 takes, 60 s background, 20 settings | **0 of 10 at every setting**, 0 false triggers. Not a model result: Windows switched the default input to the earbuds ("Headset (realme Buds Air7 Pro)"), whose headset-mode audio is too thin |
+| `wake-bench`, laptop mic (Realtek array), 10 takes, 60 s background | 1 of 10 at the default; best **7 of 10** at threshold 0.02 with score 3 or 4; 0 false triggers at every setting; decode load 1.3 to 1.6% |
+| `wake-bench`, laptop mic, **20 takes, 300 s background**, thresholds 0.02 to 0.002, scores 3 to 8 | Best **13 of 20 (65%)** at score 4 (7 of 10 plain, 6 of 10 "hey"); score 3: 12 of 20; scores 6 and 8 are *worse* (best 9 of 20); a threshold below 0.02 changes nothing; **0 false triggers in 300 s at all 16 settings**; decode load 1.4 to 1.6% |
 
-Phrase file uses the model's own BPE pieces: `▁HE Y ▁JA R VI S @hey_jarvis`.
-Model licence: card says Apache-2.0; trained on GigaSpeech data. Check before shipping (D-20).
+Reading it against §10 (false rejects at 1 to 3 m in a quiet room: hard limit 10%, target 5%; false
+accepts: at most 1 per 4 h, target 1 per 24 h):
+
+- **False rejects: about 35%. Fails the hard limit by a wide margin.**
+- Sensitivity is not the limit: with the threshold at its floor and no false triggers even at the most
+  sensitive settings, the model simply does not recognise this speaker's "Jarvis" in roughly a third of
+  the takes. Boosting the score further makes it worse. Tuning the two knobs is exhausted.
+- False accepts are **not measured**: 5 minutes of background says nothing about a rate of one per 4
+  hours. It only shows the settings are not wildly trigger-happy.
+- Standby cost is fine: about 42 MB and 1.4 to 1.6% of one thread (target 2%).
+- One speaker, one room, one microphone, 20 takes of 3 s each; takes were not checked for timing or level.
+
+Input device finding for the design: Windows makes Bluetooth earbuds the default microphone when they
+connect, and in that mode the audio is useless for a wake word. The app must pick its input device
+deliberately, show which one it is using, and warn when the default is a Bluetooth headset.
+
+Options if the stock model stays below the limit (none decided; D-02 stays open):
+1. **openWakeWord pretrained "hey jarvis"**: purpose-built for this phrase, but CC BY-NC-SA 4.0
+   (personal use only; D-01 and D-19 need an explicit decision, and the model would be downloaded by
+   the user, never committed) and it needs its own ONNX runner next to sherpa-onnx (CLAUDE.md allows
+   only sherpa-onnx for speech, so that needs a decision too). Not measured here.
+2. **Train a "Jarvis" model** on synthetic speech (the Kokoro voices) plus recorded speech; the spec
+   estimates 1 to 3 days. The owner's laptop has an RTX 4070.
+3. **Match "Jarvis"-like words in a small speech recogniser** that runs behind the voice detector:
+   tolerates accents, costs more CPU, and the recognisers mishear the name ("jawless", "Javas", "Jealous").
+4. **Push-to-talk first** (the spec's guaranteed input path) and leave the wake word for later.
 
 ## Text to speech (D-03): Kokoro-82M int8 in lexicon-only mode
 
