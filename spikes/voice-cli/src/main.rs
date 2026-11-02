@@ -22,7 +22,7 @@ voice-cli <command> [--flag value ...]
   wake       --kws-dir DIR --keywords FILE [--seconds 120] [--threshold 0.25]
              [--score 1.0] [--device NAME]    (or --wav FILE instead of the microphone)
   bench      --vad SILERO.onnx --models NAME=KIND:DIR[,NAME=KIND:DIR...]
-             [--count 30] [--window 7] [--threads 4] [--device NAME]
+             [--count 30] [--window 7] [--threads 4] [--preroll 0.3,0.6] [--device NAME]
              (or --wav-list FILE with lines like path.wav|what was said)
              you read 30 phrases; every model decodes the same audio; prints WER
   say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--provider cpu] [--no-play]
