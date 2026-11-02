@@ -9,5 +9,7 @@ pub mod keychain;
 // Called by the apps.launch and system.status tools (Dev A's next M4 PR).
 #[allow(dead_code)]
 pub mod launch;
+// Used by the music.control and music.now_playing tools through tools::adapters.
+pub mod media;
 #[allow(dead_code)]
 pub mod status;

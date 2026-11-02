@@ -17,6 +17,183 @@ pub enum Intent {
     FindFile(String),
     /// "Remember that ...": the text exactly as spoken, for the confirmation card.
     Remember(String),
+    /// "Pause", "next song", "volume up": a media-session command, no model needed.
+    Music(MusicCmd),
+    /// "What's playing?"
+    NowPlaying,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MusicCmd {
+    Play,
+    Pause,
+    Next,
+    Previous,
+    VolumeUp,
+    VolumeDown,
+    /// Audio mute (the system key toggles). Plain "mute" still means the microphone.
+    Mute,
+}
+
+impl MusicCmd {
+    /// The `action` of the `music.control` tool.
+    pub fn action(self) -> &'static str {
+        match self {
+            Self::Play => "play",
+            Self::Pause => "pause",
+            Self::Next => "next",
+            Self::Previous => "previous",
+            Self::VolumeUp => "volume_up",
+            Self::VolumeDown => "volume_down",
+            Self::Mute => "mute",
+        }
+    }
+}
+
+/// Whole-sentence matches only, like the other local intents, so a sentence that merely
+/// contains "next" or "pause" goes to the model.
+fn music(s: &str) -> Option<Intent> {
+    const PAUSE: &[&str] = &[
+        "pause",
+        "pause the music",
+        "pause music",
+        "pause the song",
+        "pause the track",
+        "pause playback",
+        "stop the music",
+        "stop music",
+        "stop the song",
+        "stop playback",
+    ];
+    const PLAY: &[&str] = &[
+        "play",
+        "resume",
+        "resume the music",
+        "resume music",
+        "resume playing",
+        "resume playback",
+        "continue playing",
+        "continue the music",
+        "keep playing",
+        "unpause",
+        "unpause the music",
+        "play music",
+        "play the music",
+        "play some music",
+        "start the music",
+        "start music",
+    ];
+    const NEXT: &[&str] = &[
+        "next",
+        "next song",
+        "next track",
+        "next one",
+        "skip",
+        "skip song",
+        "skip track",
+        "skip this",
+        "skip this song",
+        "skip this track",
+        "skip it",
+        "play next",
+        "play the next song",
+        "play next song",
+        "play the next track",
+        "go to the next song",
+        "go to the next track",
+    ];
+    const PREVIOUS: &[&str] = &[
+        "previous",
+        "previous song",
+        "previous track",
+        "last song",
+        "last track",
+        "play previous",
+        "play the previous song",
+        "play the previous track",
+        "play the last song",
+        "go back a song",
+        "go back one song",
+        "go to the previous song",
+        "go to the previous track",
+    ];
+    const VOLUME_UP: &[&str] = &[
+        "volume up",
+        "turn the volume up",
+        "turn volume up",
+        "turn up the volume",
+        "turn it up",
+        "louder",
+        "make it louder",
+        "increase the volume",
+        "raise the volume",
+        "turn the music up",
+    ];
+    const VOLUME_DOWN: &[&str] = &[
+        "volume down",
+        "turn the volume down",
+        "turn volume down",
+        "turn down the volume",
+        "turn it down",
+        "quieter",
+        "softer",
+        "make it quieter",
+        "lower the volume",
+        "decrease the volume",
+        "reduce the volume",
+        "turn the music down",
+    ];
+    const MUTE: &[&str] = &[
+        "mute the music",
+        "mute music",
+        "mute the volume",
+        "mute the sound",
+        "mute the audio",
+        "unmute the music",
+        "unmute the volume",
+        "unmute the sound",
+        "unmute the audio",
+    ];
+    const NOW_PLAYING: &[&str] = &[
+        "what's playing",
+        "whats playing",
+        "what is playing",
+        "what's playing right now",
+        "what is playing right now",
+        "what's currently playing",
+        "what is currently playing",
+        "what song is this",
+        "what song is this one",
+        "what song is playing",
+        "what's this song",
+        "whats this song",
+        "what is this song",
+        "what's the song",
+        "what track is this",
+        "which song is this",
+        "what am i listening to",
+        "now playing",
+    ];
+    let cmd = if one_of(s, PAUSE) {
+        MusicCmd::Pause
+    } else if one_of(s, PLAY) {
+        MusicCmd::Play
+    } else if one_of(s, NEXT) {
+        MusicCmd::Next
+    } else if one_of(s, PREVIOUS) {
+        MusicCmd::Previous
+    } else if one_of(s, VOLUME_UP) {
+        MusicCmd::VolumeUp
+    } else if one_of(s, VOLUME_DOWN) {
+        MusicCmd::VolumeDown
+    } else if one_of(s, MUTE) {
+        MusicCmd::Mute
+    } else if one_of(s, NOW_PLAYING) {
+        return Some(Intent::NowPlaying);
+    } else {
+        return None;
+    };
+    Some(Intent::Music(cmd))
 }
 
 const FILLER_PREFIXES: &[&str] = &[
@@ -220,6 +397,9 @@ pub fn route(input: &str) -> Option<Intent> {
     ) {
         return Some(Intent::WhatCanYouDo);
     }
+    if let Some(i) = music(&s) {
+        return Some(i);
+    }
     if let Some(app) = arg_after(&s, &["open ", "launch ", "start "]) {
         return Some(Intent::LaunchApp(app));
     }
@@ -267,6 +447,54 @@ mod tests {
             route("hey jarvis hey jarvis what's the date"),
             Some(DateToday)
         );
+    }
+
+    #[test]
+    fn music_commands_are_matched_as_whole_sentences() {
+        assert_eq!(route("Pause"), Some(Music(MusicCmd::Pause)));
+        assert_eq!(
+            route("Hey Jarvis, please pause the music."),
+            Some(Music(MusicCmd::Pause))
+        );
+        assert_eq!(route("stop the music"), Some(Music(MusicCmd::Pause)));
+        assert_eq!(route("Resume"), Some(Music(MusicCmd::Play)));
+        assert_eq!(route("play"), Some(Music(MusicCmd::Play)));
+        assert_eq!(route("start the music"), Some(Music(MusicCmd::Play)));
+        assert_eq!(route("Skip this song"), Some(Music(MusicCmd::Next)));
+        assert_eq!(route("next track"), Some(Music(MusicCmd::Next)));
+        assert_eq!(
+            route("play the previous song"),
+            Some(Music(MusicCmd::Previous))
+        );
+        assert_eq!(route("Turn it up"), Some(Music(MusicCmd::VolumeUp)));
+        assert_eq!(route("lower the volume"), Some(Music(MusicCmd::VolumeDown)));
+        assert_eq!(route("mute the music"), Some(Music(MusicCmd::Mute)));
+        assert_eq!(route("What's playing?"), Some(NowPlaying));
+        assert_eq!(route("what song is this"), Some(NowPlaying));
+    }
+
+    #[test]
+    fn music_words_inside_a_longer_sentence_go_to_the_model() {
+        for q in [
+            "can the next version of the app skip tests",
+            "pause for a moment and think about this",
+            "play me something by the Beatles",
+            "play Bohemian Rhapsody",
+            "what is the next step",
+            "why is the volume of trade up",
+        ] {
+            assert!(!matches!(route(q), Some(Music(_) | NowPlaying)), "{q:?}");
+        }
+    }
+
+    #[test]
+    fn plain_mute_stays_the_microphone_and_the_music_forms_are_separate() {
+        assert_eq!(route("mute"), Some(Mute));
+        assert_eq!(route("unmute"), Some(Unmute));
+        assert_eq!(route("mute the sound"), Some(Music(MusicCmd::Mute)));
+        // Opening an app is still opening an app.
+        assert_eq!(route("open Spotify"), Some(LaunchApp("spotify".into())));
+        assert_eq!(route("start Chrome"), Some(LaunchApp("chrome".into())));
     }
 
     #[test]

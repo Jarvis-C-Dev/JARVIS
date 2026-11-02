@@ -29,6 +29,8 @@ pub const ALPHA_TOOLS: &[&str] = &[
     "files.move",
     "files.rename",
     "memory.propose",
+    "music.control",
+    "music.now_playing",
 ];
 
 /// Never available in alpha (spec §3.2, §9.4), whatever the model asks.

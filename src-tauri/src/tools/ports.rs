@@ -35,6 +35,46 @@ pub trait MemoryInbox: Send + Sync {
     fn propose(&self, text: &str) -> Result<String, String>;
 }
 
+/// What can be asked of whatever is playing media. A fixed list: no text reaches the OS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaAction {
+    Play,
+    Pause,
+    Next,
+    Previous,
+    VolumeUp,
+    VolumeDown,
+    /// The system mute key toggles.
+    MuteToggle,
+}
+
+/// The track the system reports. The strings come from the playing app: untrusted text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NowPlaying {
+    pub title: String,
+    pub artist: String,
+    pub playing: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaError {
+    /// This build or operating system has no adapter yet.
+    Unsupported,
+    /// No app has a media session open.
+    NothingPlaying,
+    /// An app has a session but did not accept the command.
+    Refused,
+    Failed,
+}
+
+/// Pause, skip, volume and "what is playing", through the operating system. Blocking; the
+/// tools call it on a blocking thread.
+pub trait MediaControl: Send + Sync {
+    fn act(&self, action: MediaAction) -> Result<(), MediaError>;
+    /// `Ok(None)` means nothing is playing.
+    fn now_playing(&self) -> Result<Option<NowPlaying>, MediaError>;
+}
+
 pub struct NoLauncher;
 impl AppLauncher for NoLauncher {
     fn launch(&self, _: &str) -> io::Result<()> {
@@ -42,6 +82,16 @@ impl AppLauncher for NoLauncher {
             io::ErrorKind::Unsupported,
             "launching apps is not available in this build",
         ))
+    }
+}
+
+pub struct NoMedia;
+impl MediaControl for NoMedia {
+    fn act(&self, _: MediaAction) -> Result<(), MediaError> {
+        Err(MediaError::Unsupported)
+    }
+    fn now_playing(&self) -> Result<Option<NowPlaying>, MediaError> {
+        Err(MediaError::Unsupported)
     }
 }
 
@@ -92,15 +142,17 @@ pub struct Ports {
     pub launcher: Arc<dyn AppLauncher>,
     pub status: Arc<dyn StatusSource>,
     pub memory: Arc<dyn MemoryInbox>,
+    pub media: Arc<dyn MediaControl>,
 }
 
 impl Ports {
-    /// Placeholders: launching and status unavailable, proposals kept in memory.
+    /// Placeholders: launching, status and media control unavailable, proposals kept in memory.
     pub fn placeholders() -> Self {
         Self {
             launcher: Arc::new(NoLauncher),
             status: Arc::new(NoStatus),
             memory: Arc::new(MemoryProposals::new(100)),
+            media: Arc::new(NoMedia),
         }
     }
 }

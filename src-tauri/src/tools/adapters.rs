@@ -1,7 +1,11 @@
 //! Connects the tool traits (`ports.rs`) to the real platform code in `platform/`. No
 //! OS-specific code lives here: it only forwards and converts types.
 
-use super::ports::{AppLauncher, Ports, StatusSource, SystemStatus};
+use super::ports::{
+    AppLauncher, MediaAction, MediaControl, MediaError, NowPlaying, Ports, StatusSource,
+    SystemStatus,
+};
+use crate::platform::media;
 use crate::platform::status::{self, BatteryState};
 use std::io;
 use std::sync::Arc;
@@ -11,6 +15,44 @@ pub struct PlatformLauncher;
 impl AppLauncher for PlatformLauncher {
     fn launch(&self, app_id: &str) -> io::Result<()> {
         crate::platform::launch::launch(app_id)
+    }
+}
+
+pub struct PlatformMedia;
+
+impl MediaControl for PlatformMedia {
+    fn act(&self, action: MediaAction) -> Result<(), MediaError> {
+        media::send(match action {
+            MediaAction::Play => media::Command::Play,
+            MediaAction::Pause => media::Command::Pause,
+            MediaAction::Next => media::Command::Next,
+            MediaAction::Previous => media::Command::Previous,
+            MediaAction::VolumeUp => media::Command::VolumeUp,
+            MediaAction::VolumeDown => media::Command::VolumeDown,
+            MediaAction::MuteToggle => media::Command::MuteToggle,
+        })
+        .map_err(convert_error)
+    }
+
+    fn now_playing(&self) -> Result<Option<NowPlaying>, MediaError> {
+        media::now_playing()
+            .map(|n| {
+                n.map(|n| NowPlaying {
+                    title: n.title,
+                    artist: n.artist,
+                    playing: n.playing,
+                })
+            })
+            .map_err(convert_error)
+    }
+}
+
+fn convert_error(e: media::MediaError) -> MediaError {
+    match e {
+        media::MediaError::Unsupported => MediaError::Unsupported,
+        media::MediaError::NothingPlaying => MediaError::NothingPlaying,
+        media::MediaError::Refused => MediaError::Refused,
+        media::MediaError::Failed => MediaError::Failed,
     }
 }
 
@@ -45,6 +87,7 @@ pub fn platform_ports(memory: Arc<dyn super::ports::MemoryInbox>) -> Ports {
         launcher: Arc::new(PlatformLauncher),
         status: Arc::new(PlatformStatus),
         memory,
+        media: Arc::new(PlatformMedia),
     }
 }
 
