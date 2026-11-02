@@ -49,9 +49,15 @@ pub fn vad(model: &str, min_silence: f32) -> Result<VoiceActivityDetector, Strin
 }
 
 /// `kind` is `moonshine` or `whisper`.
-pub fn asr(kind: &str, dir: &Path, threads: i32) -> Result<OfflineRecognizer, String> {
+pub fn asr(
+    kind: &str,
+    dir: &Path,
+    threads: i32,
+    provider: &str,
+) -> Result<OfflineRecognizer, String> {
     let mut m = OfflineModelConfig {
         num_threads: threads,
+        provider: Some(provider.into()),
         tokens: Some(pick(dir, &["tokens"], &[], ".txt")?),
         ..Default::default()
     };
@@ -106,7 +112,7 @@ pub fn kws(
 
 /// Kokoro in lexicon mode (sherpa-onnx 2.x no longer uses espeak-ng; the language comes from
 /// the lexicon files). An `espeak-ng-data` folder (GPL-3.0) is deliberately never passed.
-pub fn tts(dir: &Path, threads: i32) -> Result<OfflineTts, String> {
+pub fn tts(dir: &Path, threads: i32, provider: &str) -> Result<OfflineTts, String> {
     let mut lexicons: Vec<String> = std::fs::read_dir(dir)
         .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -127,6 +133,7 @@ pub fn tts(dir: &Path, threads: i32) -> Result<OfflineTts, String> {
     cfg.model.kokoro.tokens = Some(pick(dir, &["tokens"], &[], ".txt")?);
     cfg.model.kokoro.lexicon = Some(lexicons.join(","));
     cfg.model.num_threads = threads;
+    cfg.model.provider = Some(provider.into());
     OfflineTts::create(&cfg)
         .ok_or_else(|| format!("cannot load the voice model in {}", dir.display()))
 }

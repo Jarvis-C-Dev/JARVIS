@@ -17,10 +17,10 @@ voice-cli <command> [--flag value ...]
   mic        [--seconds 5] [--device NAME]
   transcribe --wav FILE --vad SILERO.onnx --asr moonshine|whisper --asr-dir DIR
   listen     --vad SILERO.onnx --asr moonshine|whisper --asr-dir DIR
-             [--seconds 60] [--device NAME] [--silence 0.7]
+             [--seconds 60] [--device NAME] [--silence 0.7] [--threads 2] [--provider cpu]
   wake       --kws-dir DIR --keywords FILE [--seconds 120] [--threshold 0.25]
              [--score 1.0] [--device NAME]    (or --wav FILE instead of the microphone)
-  say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--no-play]
+  say        --tts-dir DIR --text TEXT [--sid 24,26] [--speed 1.0] [--threads 2] [--provider cpu] [--no-play]
              (ids are for Kokoro v1.0: 24 bm_daniel, 25 bm_fable, 26 bm_george, 27 bm_lewis)
 ";
 
@@ -137,7 +137,12 @@ fn cmd_mic(a: &Args) -> Result<(), String> {
 fn cmd_transcribe(a: &Args) -> Result<(), String> {
     let t0 = Instant::now();
     let vad = models::vad(a.need("vad")?, a.num("silence", 0.7)?)?;
-    let rec = models::asr(a.need("asr")?, &PathBuf::from(a.need("asr-dir")?), 2)?;
+    let rec = models::asr(
+        a.need("asr")?,
+        &PathBuf::from(a.need("asr-dir")?),
+        a.num("threads", 2)?,
+        a.get("provider").unwrap_or("cpu"),
+    )?;
     println!("models loaded in {:.0} ms", ms(t0.elapsed()));
     let wav = Wave::read(a.need("wav")?).ok_or("cannot read the WAV file")?;
     let mut samples = wav.samples().to_vec();
@@ -178,7 +183,12 @@ fn cmd_transcribe(a: &Args) -> Result<(), String> {
 fn cmd_listen(a: &Args) -> Result<(), String> {
     let silence: f32 = a.num("silence", 0.7)?;
     let vad = models::vad(a.need("vad")?, silence)?;
-    let rec = models::asr(a.need("asr")?, &PathBuf::from(a.need("asr-dir")?), 2)?;
+    let rec = models::asr(
+        a.need("asr")?,
+        &PathBuf::from(a.need("asr-dir")?),
+        a.num("threads", 2)?,
+        a.get("provider").unwrap_or("cpu"),
+    )?;
     let cap = audio::Capture::start(a.get("device"))?;
     let secs: f32 = a.num("seconds", 60.0)?;
     println!(
@@ -302,7 +312,11 @@ fn split_sentences(text: &str) -> Vec<String> {
 
 fn cmd_say(a: &Args) -> Result<(), String> {
     let t0 = Instant::now();
-    let tts = models::tts(&PathBuf::from(a.need("tts-dir")?), a.num("threads", 2)?)?;
+    let tts = models::tts(
+        &PathBuf::from(a.need("tts-dir")?),
+        a.num("threads", 2)?,
+        a.get("provider").unwrap_or("cpu"),
+    )?;
     println!(
         "voice loaded in {:.0} ms ({} speaker id(s), {} Hz)",
         ms(t0.elapsed()),
