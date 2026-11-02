@@ -45,6 +45,8 @@ goto install
 echo jarvis: could not update - offline? Starting what you have.
 
 :install
+rem A failed git pull above leaves ERRORLEVEL at 1; clear it so only pnpm's own result counts.
+ver >nul
 call pnpm install --silent
 if errorlevel 1 goto installfail
 if /i "%MODE%"=="mock" goto mock

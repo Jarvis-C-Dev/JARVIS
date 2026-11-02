@@ -35,7 +35,7 @@ function Invoke-Jarvis([string]$name, [string]$pathValue) {
 try {
     New-Item -ItemType Directory -Force -Path $fakebin, "$repo\scripts", (Join-Path $tmp 'home') | Out-Null
     foreach ($tool in 'pnpm', 'cargo') {
-        $fake = "@echo off`r`necho %~n0 %* ^| VITE_TRANSPORT=%VITE_TRANSPORT% ^| pwd=%CD% >> `"%FAKE_LOG%`"`r`n"
+        $fake = "@echo off`r`necho %~n0 %* ^| VITE_TRANSPORT=%VITE_TRANSPORT% ^| pwd=%CD% >> `"%FAKE_LOG%`"`r`nexit /b 0`r`n"
         [IO.File]::WriteAllText((Join-Path $fakebin "$tool.cmd"), $fake, (New-Object Text.ASCIIEncoding))
     }
     $env:FAKE_LOG = $log
