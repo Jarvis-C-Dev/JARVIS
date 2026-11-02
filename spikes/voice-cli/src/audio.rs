@@ -190,6 +190,11 @@ pub fn play(samples: &[f32], rate: u32) -> Result<Duration, String> {
             a + (b - a) * frac
         })
         .collect();
+    // The player used to stop as soon as the last sample was handed to the device, which cut
+    // the end of the last word ("Chrome" came out as "chro"). Trailing silence goes in first,
+    // so the real audio has left the device buffer by the time playback is declared done.
+    let mut data = data;
+    data.extend(std::iter::repeat_n(0.0, (out_rate as usize * 4) / 10));
     let data = Arc::new(data);
     let pos = Arc::new(AtomicU64::new(0));
     let started = Instant::now();
@@ -250,7 +255,7 @@ pub fn play(samples: &[f32], rate: u32) -> Result<Duration, String> {
     }
     .map_err(|e| format!("cannot open the speakers: {e}"))?;
     stream.play().map_err(|e| e.to_string())?;
-    let limit = Instant::now() + Duration::from_secs_f64(n_out as f64 / out_rate as f64 + 3.0);
+    let limit = Instant::now() + Duration::from_secs_f64(data.len() as f64 / out_rate as f64 + 3.0);
     while !done.load(Ordering::Relaxed) && Instant::now() < limit {
         std::thread::sleep(Duration::from_millis(20));
     }
