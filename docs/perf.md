@@ -11,9 +11,13 @@ budgets are still the yardstick, but they are advisory on these machines.
 
 | Label | Machine | Notes |
 | --- | --- | --- |
-| W1 | Owner's Windows laptop | Intel UHD Graphics and NVIDIA GeForce RTX 4070 Laptop GPU, 20 logical processors (from git), Realtek microphone array at 48 kHz stereo. Model, CPU name, RAM and Windows version still to be added by the owner. |
+| W1 | Owner's Windows laptop: ASUS ROG Strix G16 (G614JI), device name LAPTOP-JSVPQ189 | 13th Gen Intel Core i7-13650HX (2.60 GHz; 14 cores and 20 threads per Intel's published spec), 16 GB RAM (15.6 GB usable, 4800 MT/s), NVIDIA GeForce RTX 4070 Laptop GPU (8 GB) and Intel UHD Graphics (128 MB), 1.40 TB storage. Realtek microphone array at 48 kHz stereo. The Windows version is still to be added. |
 | M1 | Developer B's MacBook Air M2, 16 GB | No numbers yet. |
 | C1 | Cloud VM, Intel Xeon 2.1 GHz, 4 cores, Linux | Not a target machine. Used only to check that tools work. |
+
+W1 is far faster than the spec's reference machine (4 cores, 8 GB, integrated graphics), so a budget that is
+met on W1 says little about that machine; D-21 makes W1 and M1 the targets, so that is accepted. A budget
+that is missed on W1 would be a real problem.
 
 ## §10 budgets and what we know
 
