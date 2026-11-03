@@ -54,8 +54,8 @@ jobs:
             echo "::error::VITE_TRANSPORT is set to 'mock' in release build environment"
             exit 1
           fi
-      - name: Build frontend
-        run: pnpm build
+      - name: Build installers
+        run: pnpm tauri build
       - name: Guard against mock bundle
         shell: bash
         run: |
@@ -67,8 +67,6 @@ jobs:
             echo "::error::Mock transport detected in release bundle (dist/)"
             exit 1
           fi
-      - name: Build installers
-        run: pnpm tauri build
       - name: Checksums
         shell: bash
         run: |
