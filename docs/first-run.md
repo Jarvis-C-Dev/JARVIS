@@ -38,11 +38,11 @@ These commands never call the Anthropic cloud model, whether or not you have an 
 - **`stop`** or **`cancel`** — cancels a reply that is currently running. You can also click **Cancel Esc** or press `Esc`.
 - **`Repeat that`** or **`Say that again`** — repeats JARVIS's last reply.
 - **`Remember that ...`** (for example, `Remember that I prefer morning meetings.`) — shows a **Remember this?** confirmation card with the exact text and three buttons: **Keep**, **Edit**, and **Don't keep**. Nothing is saved until you click **Keep** (or **Edit** → **Save and keep**). You can view, edit, or delete saved memories at any time under **Memory** in the top bar.
-- **Music controls (Windows and macOS)**:
+- **Music controls**:
   - Try typing **`pause`**, **`play`** (or **`resume`**), **`next song`**, **`previous song`**, **`volume up`**, **`volume down`**, **`mute the music`**, or **`what's playing`**.
-  - These talk to your operating system's media controls, not to the internet. On **Windows**, they control whatever Windows treats as the current media session (so if a browser tab played sound most recently, that is what pauses). On **macOS**, they reach the **Spotify** and **Music** apps only (never starting an app that is not already open; the first time, macOS asks for permission under System Settings, Privacy and Security, Automation — not checked in the app). Linux says they are not available.
+  - These talk to your operating system's media controls, not to the internet. On **Windows**, they control whatever Windows treats as the current media session (so if a browser tab played sound most recently, that is what pauses).
   - Volume moves about 10% per command, and `mute the music` toggles system audio mute (plain `mute` is for the microphone). After `what's playing`, the track name comes from another app, so the conversation counts as containing outside text and routine file actions ask for approval again even if routine prompts are switched off.
-  - **Playing a song by name (`play <words>`, Spotify step 2)**: `docs/known-limitations.md` notes that `play <words>` **works on macOS, but on Windows it is not working yet** (Spotify accepts the song, but the desktop app does not start it; do not rely on it on Windows). Where supported, it needs a one-time setup in **Settings** → **Music** with your own free Spotify developer app (**Spotify Client ID**, Redirect URI `http://127.0.0.1:43597/callback`), **Connect Spotify**, Spotify **Premium**, and the Spotify app open. It plays the single best search match and cannot pick an album track by track, make playlists, or like songs yet. After a song starts, the conversation counts as containing outside text.
+  - Playing music by name (`play <words>`) needs a one-time Spotify setup; see [`docs/known-limitations.md`](known-limitations.md).
 
 ### Commands that use local tools directly when offline, out of budget, or without an API key
 
@@ -59,7 +59,7 @@ When the cloud model asks to read a plain-text file (up to 1 MB), move a file, o
 
 - When JARVIS first starts, the status line under the orb shows **Network unknown**. JARVIS only detects that you are offline when a cloud request fails.
 - If you send a general question while disconnected from the internet, the request fails without adding the failed turn to your history. The status line changes to **Offline: local features only**, and an error banner shows **You're offline** ("Local commands still work; cloud answers resume when you reconnect.") with a **Retry** button.
-- While offline, all of the local commands and local tool questions listed in Section 2 (`mute`, `stop`, `what can you do?`, `repeat that`, `remember that ...`, system music controls such as `pause` and `next song`, `what time is it?`, `how's my battery?`, `open <allowed app>`, and `find my <file>`) continue to work on your computer. (`play <words>` through Spotify needs the internet.)
+- While offline, all of the local commands and local tool questions listed in Section 2 (`mute`, `stop`, `what can you do?`, `repeat that`, `remember that ...`, system music controls such as `pause` and `next song`, `what time is it?`, `how's my battery?`, `open <allowed app>`, and `find my <file>`) continue to work on your computer.
 - Free-form questions and multi-step requests need the cloud model and wait until you are back online.
 
 ## 4. Where usage and the spend cap are shown
@@ -89,11 +89,10 @@ This matches [`docs/privacy.md`](privacy.md), which describes everything JARVIS 
   - up to five of your **kept** memories that match your question (never memories still waiting on a confirmation card);
   - JARVIS's own system instructions (its personality and tool descriptions).
 - Anthropic's own terms and data-retention policies apply to what you send them. Only allow folders and approve file reads for files you are comfortable sending to Anthropic.
-- **Spotify exception for `play <words>`**: basic music controls (`pause`, `next song`, `volume up`, `what's playing`) do not use the internet. If you connect Spotify in **Settings** → **Music** and type `play <words>`, the words you ask to play go to Spotify (`api.spotify.com`) to find and start the song; nothing about that command is sent to Anthropic. The track title returned by Spotify is shown to you and, like any reply, can be part of the recent conversation sent with your next cloud model message.
 
 ### What stays on your computer
 
-- **Your API key**: stored in your operating system's credential store (Windows Credential Manager on Windows, macOS Keychain on macOS, or the desktop secret store on Linux). If you connect Spotify in **Settings** → **Music**, the sign-in happens in your own browser and JARVIS keeps only a Spotify refresh token in your system keychain (never in a file or in the app window; **Disconnect** deletes it).
+- **Your API key**: stored in your operating system's credential store (Windows Credential Manager on Windows, macOS Keychain on macOS, or the desktop secret store on Linux).
 - **Settings** (model, spend caps, allowed folders, allowed apps): stored in `settings.json` in the app configuration folder.
 - **Conversation history**: stored in `jarvis.db` in the app data folder and kept for **30 days by default**. In the **History** panel (top bar), you can change **Keep history for** to `Off (keep nothing)`, `7 days`, `30 days`, `1 year`, or `Forever`, or click **Delete all history**. A new conversation starts automatically after ten idle minutes (there is no "new conversation" button yet).
 - **Memories**: stored in `jarvis.db` only when you click **Keep** on a **Remember this?** card, and kept until you delete them in the **Memory** panel.
