@@ -59,17 +59,26 @@ pub fn send(cmd: Command) -> Result<(), MediaError> {
 }
 
 /// Starts one Spotify track in the Spotify desktop app on this computer, without the
-/// internet account route. `uri` must be a plain `spotify:track:` address; anything else is
-/// refused before a script is run. macOS only; other systems say `Unsupported`. Never starts
-/// Spotify itself: if it is not running the answer is `NothingPlaying`. Blocking.
+/// internet account route. `uri` must be a plain track, playlist or liked-songs address
+/// (`valid_play_uri`); anything else is refused before a script is run. macOS only; other systems
+/// say `Unsupported`. This call never starts Spotify itself: if it is not running the answer is
+/// `NothingPlaying`, and the caller decides whether to start it (`start_spotify_app`). Blocking.
 pub fn play_spotify_uri(uri: &str) -> Result<(), MediaError> {
-    imp::play_spotify_uri(uri)
+    imp::play_spotify_uri(uri, false)
 }
 
-/// Starts the Spotify desktop app on this computer so it can show up as a device to play on.
-/// Windows only (macOS never starts Spotify, by design; other systems say `Unsupported`). It
-/// refuses, without opening any dialog, when Spotify is not installed. The only thing ever passed
-/// to the system is the fixed address `spotify:`. Blocking.
+/// Like `play_spotify_uri`, but plays a track the way Spotify does by default: inside its album,
+/// so the album's next song follows. Only used as a last resort, when the strict form that plays
+/// a track on its own did not work. Blocking.
+pub fn play_spotify_uri_in_album(uri: &str) -> Result<(), MediaError> {
+    imp::play_spotify_uri(uri, true)
+}
+
+/// Starts the Spotify desktop app on this computer, because the person asked for a song and it is
+/// closed (decision D-25; before it, macOS never started it). Windows opens the fixed address
+/// `spotify:`; macOS opens the app by its fixed bundle id in the background. Either refuses,
+/// without opening any dialog, when Spotify is not installed; other systems say `Unsupported`.
+/// Nothing from the person, the model or Spotify is ever passed to the system. Blocking.
 pub fn start_spotify_app() -> Result<(), MediaError> {
     spotify_start::start()
 }
@@ -134,7 +143,33 @@ mod spotify_start {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+mod spotify_start {
+    use super::MediaError;
+    use std::process::{Command, Stdio};
+
+    /// Spotify's bundle id. A fixed value: `open -b` looks the app up by it and, when it is not
+    /// installed, fails with a message and no dialog (unlike naming the app in a script).
+    const BUNDLE_ID: &str = "com.spotify.client";
+
+    pub fn start() -> Result<(), MediaError> {
+        // `-g`: in the background, so JARVIS keeps the focus. Absolute path, no shell.
+        let status = Command::new("/usr/bin/open")
+            .args(["-g", "-b", BUNDLE_ID])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        match status {
+            Ok(s) if s.success() => Ok(()),
+            // A non-zero answer means the app is not installed (or could not be opened).
+            Ok(_) => Err(MediaError::Unsupported),
+            Err(_) => Err(MediaError::Failed),
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 mod spotify_start {
     use super::MediaError;
 
@@ -254,7 +289,7 @@ mod imp {
         }
     }
 
-    pub fn play_spotify_uri(_: &str) -> Result<(), MediaError> {
+    pub fn play_spotify_uri(_: &str, _album: bool) -> Result<(), MediaError> {
         Err(MediaError::Unsupported)
     }
 
@@ -393,17 +428,50 @@ mod applescript {
         )
     }
 
-    /// A Spotify track address: `spotify:track:` and exactly 22 letters or digits. Nothing
-    /// else can be passed to the play-a-track script.
+    fn id22(id: &str) -> bool {
+        id.len() == 22 && id.bytes().all(|b| b.is_ascii_alphanumeric())
+    }
+
+    /// A Spotify track address: `spotify:track:` and exactly 22 letters or digits.
     pub fn valid_track_uri(uri: &str) -> bool {
-        uri.strip_prefix("spotify:track:")
-            .is_some_and(|id| id.len() == 22 && id.bytes().all(|b| b.is_ascii_alphanumeric()))
+        uri.strip_prefix("spotify:track:").is_some_and(id22)
+    }
+
+    /// What may be passed to the play script: a track, a playlist or an artist (`spotify:playlist:` or
+    /// `spotify:artist:` and 22 letters or digits), or a person's liked songs (`spotify:user:<id>:collection`, the id made
+    /// of letters, digits, dots, dashes and underscores). Nothing else.
+    pub fn valid_play_uri(uri: &str) -> bool {
+        if valid_track_uri(uri) {
+            return true;
+        }
+        if uri.strip_prefix("spotify:playlist:").is_some_and(id22)
+            || uri.strip_prefix("spotify:artist:").is_some_and(id22)
+        {
+            return true;
+        }
+        uri.strip_prefix("spotify:user:")
+            .and_then(|rest| rest.strip_suffix(":collection"))
+            .is_some_and(|id| {
+                !id.is_empty()
+                    && id.len() <= 64
+                    && id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+            })
     }
 
     /// Plays one track in Spotify. The address is **an argument** of the script (`argv`),
     /// never part of its text, so it cannot change what the script does.
     pub const PLAY_TRACK_SCRIPT: &str = "on run argv\n\
          tell application \"Spotify\" to play track (item 1 of argv)\n\
+         end run";
+
+    /// Plays one track **as its own context**, so only that song plays and Spotify's autoplay then
+    /// carries on with similar music, not the album's next song (tested on a real Mac: after the
+    /// song, an unrelated similar one played; the plain script above played the album's next
+    /// track). The same address is the track and its context, both read from `argv`.
+    pub const PLAY_TRACK_ALONE_SCRIPT: &str = "on run argv\n\
+         tell application \"Spotify\" to play track (item 1 of argv) in context (item 1 of argv)\n\
          end run";
 
     /// What `player state as string` says.
@@ -714,12 +782,20 @@ mod imp {
         run(&transport).map(|_| ())
     }
 
-    pub fn play_spotify_uri(uri: &str) -> Result<(), MediaError> {
-        if !script::valid_track_uri(uri) {
+    pub fn play_spotify_uri(uri: &str, album: bool) -> Result<(), MediaError> {
+        if !script::valid_play_uri(uri) {
             return Err(MediaError::Failed);
         }
         if !running(Player::Spotify)? {
             return Err(MediaError::NothingPlaying);
+        }
+        // A single track plays on its own (autoplay follows); a playlist, an artist or the liked
+        // songs are contexts already and play as they are. There is no quiet fallback here: a
+        // freshly started Spotify refuses commands for a few seconds, and quietly playing the
+        // track inside its album at that moment would make the album follow. The caller retries,
+        // and asks for the album form (`album: true`) only as a last resort.
+        if script::valid_track_uri(uri) && !album {
+            return run_with(script::PLAY_TRACK_ALONE_SCRIPT, &[uri]).map(|_| ());
         }
         run_with(script::PLAY_TRACK_SCRIPT, &[uri]).map(|_| ())
     }
@@ -743,7 +819,7 @@ mod imp {
 mod imp {
     use super::{Command, MediaError, NowPlaying};
 
-    pub fn play_spotify_uri(_: &str) -> Result<(), MediaError> {
+    pub fn play_spotify_uri(_: &str, _album: bool) -> Result<(), MediaError> {
         Err(MediaError::Unsupported)
     }
 
@@ -770,7 +846,9 @@ mod tests {
 
 #[cfg(test)]
 mod play_track_tests {
-    use super::applescript::{PLAY_TRACK_SCRIPT, valid_track_uri};
+    use super::applescript::{
+        PLAY_TRACK_ALONE_SCRIPT, PLAY_TRACK_SCRIPT, valid_play_uri, valid_track_uri,
+    };
 
     #[test]
     fn only_plain_spotify_track_addresses_reach_the_play_script() {
@@ -791,9 +869,40 @@ mod play_track_tests {
     }
 
     #[test]
+    fn playlists_and_liked_songs_are_accepted_and_nothing_near_them() {
+        assert!(valid_play_uri("spotify:track:4u7EnebtmKWzUH433cf5Qv"));
+        assert!(valid_play_uri("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"));
+        assert!(valid_play_uri("spotify:artist:1Xyo4u8uXC1ZmMpatF05PJ"));
+        assert!(!valid_play_uri("spotify:artist:1Xyo4u8uXC1ZmMpatF05"));
+        assert!(valid_play_uri("spotify:user:some.user-name_1:collection"));
+        for bad in [
+            "",
+            "spotify:playlist:",
+            "spotify:playlist:37i9dQZF1DXcBWIGoYBM5",
+            "spotify:playlist:37i9dQZF1DXcBWIGoYBM5MM",
+            "spotify:playlist:37i9dQZF1DXcBWIGoYBM5\"",
+            "spotify:album:6i6folBtxKV28WX3msQ4FE",
+            "spotify:user::collection",
+            "spotify:user:a b:collection",
+            "spotify:user:a\":collection",
+            "spotify:user:abc:playlist:37i9dQZF1DXcBWIGoYBM5M",
+            "spotify:user:abc:collection ",
+            "spotify:user:abc:collection\n",
+        ] {
+            assert!(!valid_play_uri(bad), "{bad:?}");
+        }
+        // The old track-only check is unchanged.
+        assert!(!valid_track_uri("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"));
+    }
+
+    #[test]
     fn the_play_script_is_fixed_text_that_reads_its_address_from_argv() {
         assert!(PLAY_TRACK_SCRIPT.contains("item 1 of argv"));
         assert!(!PLAY_TRACK_SCRIPT.contains("spotify:"));
+        // The track-as-its-own-context form reads the address twice from argv and names none.
+        assert_eq!(PLAY_TRACK_ALONE_SCRIPT.matches("item 1 of argv").count(), 2);
+        assert!(PLAY_TRACK_ALONE_SCRIPT.contains(" in context "));
+        assert!(!PLAY_TRACK_ALONE_SCRIPT.contains("spotify:"));
     }
 
     #[test]
