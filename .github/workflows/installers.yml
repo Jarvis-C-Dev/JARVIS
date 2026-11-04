@@ -63,7 +63,7 @@ jobs:
             echo "::error::dist/ directory does not exist"
             exit 1
           fi
-          if grep -rq "mock\.app\.music" dist/; then
+          if grep -rq -e "mock\.app\.music" -e "Mock Music" dist/; then
             echo "::error::Mock transport detected in release bundle (dist/)"
             exit 1
           fi
