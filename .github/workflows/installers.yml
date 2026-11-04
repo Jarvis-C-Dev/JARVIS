@@ -47,8 +47,26 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libasound2-dev pkg-config
       - run: pnpm install --frozen-lockfile
+      - name: Guard against mock transport
+        shell: bash
+        run: |
+          if [ "${VITE_TRANSPORT:-}" = "mock" ]; then
+            echo "::error::VITE_TRANSPORT is set to 'mock' in release build environment"
+            exit 1
+          fi
       - name: Build installers
         run: pnpm tauri build
+      - name: Guard against mock bundle
+        shell: bash
+        run: |
+          if [ ! -d dist ]; then
+            echo "::error::dist/ directory does not exist"
+            exit 1
+          fi
+          if grep -rq -e "mock\.app\.music" -e "Mock Music" dist/; then
+            echo "::error::Mock transport detected in release bundle (dist/)"
+            exit 1
+          fi
       - name: Checksums
         shell: bash
         run: |
