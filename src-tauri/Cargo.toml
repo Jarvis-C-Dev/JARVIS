@@ -61,6 +61,9 @@ bzip2 = "0.4"
 # Both are already in the build (sherpa-onnx's build script uses them): flate2 is MIT OR Apache-2.0, zip is MIT.
 flate2 = "1"
 zip = { version = "9", default-features = false, features = ["deflate"] }
+# ONNX Runtime for the openWakeWord wake word ONLY (D-29), wake/oww.rs (MIT OR Apache-2.0). `load-dynamic`:
+# nothing is linked; the runtime library is the one the model manager downloaded and verified.
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-31"] }
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -72,6 +75,9 @@ plist = "1.10.3"
 libc = "0.2.191"
 
 [target.'cfg(windows)'.dependencies]
+# Opens the wake word's ONNX Runtime library with a restricted search path, platform/dll.rs (ISC; already
+# in the build as a dependency of ort, so no new package).
+libloading = "0.9"
 # MoveFileExW without REPLACE_EXISTING for no-overwrite moves (platform/fs.rs) and the system
 # volume keys (platform/media.rs).
 windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_UI_Input_KeyboardAndMouse"] }

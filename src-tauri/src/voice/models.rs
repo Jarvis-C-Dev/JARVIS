@@ -229,6 +229,23 @@ impl ModelSpec {
     }
 }
 
+/// True when the wake word is offered on this system: a download exists for it **and** the system
+/// is one the owner has decided to ship it on. macOS is not (yet): the installed app runs with the
+/// hardened runtime, which will refuse the downloaded ONNX Runtime library unless
+/// `disable-library-validation` is added, and that weakens the signature check for the whole app, so
+/// it is the owner's decision (D-29). The manifest keeps the macOS download for when it is decided.
+pub fn wake_supported() -> bool {
+    wake_supported_on(current_platform())
+}
+
+fn wake_supported_on(platform: &str) -> bool {
+    let shipped = matches!(platform, "windows-x86_64" | "linux-x86_64");
+    shipped
+        && for_platform(manifest(), platform)
+            .iter()
+            .any(|s| s.set == SET_WAKE)
+}
+
 /// The models this app version knows about.
 pub fn manifest() -> &'static [ModelSpec] {
     static M: LazyLock<Vec<ModelSpec>> = LazyLock::new(|| {
@@ -656,9 +673,48 @@ impl ModelManager {
 
     /// True once everything the wake word needs on this system is installed and verified. False on a
     /// system the wake word has no download for.
-    #[cfg_attr(not(test), allow(dead_code))] // the wake word's own steps use it
     pub fn wake_ready(&self) -> bool {
         self.set_ready(SET_WAKE)
+    }
+
+    /// The four verified files the wake word loads, once all of them are installed. `None` before
+    /// that, or on a system with no runtime download. Sizes and checksums come from the manifest.
+    pub fn wake_files(&self) -> Option<crate::wake::oww::OwwFiles> {
+        use crate::wake::oww::{OwwFiles, Pinned};
+        if !self.wake_ready() {
+            return None;
+        }
+        let pin = |spec: &ModelSpec, f: &FileSpec| Pinned {
+            path: self.root.join(spec.rel_dir()).join(&f.name),
+            bytes: f.bytes,
+            sha256: f.sha256.clone(),
+        };
+        let one = |id: &str, name: &str| -> Option<Pinned> {
+            let spec = self.specs.iter().find(|s| s.id == id)?;
+            let f = spec.files.iter().find(|f| f.name == name)?;
+            Some(pin(spec, f))
+        };
+        let runtime = self
+            .specs
+            .iter()
+            .filter(|s| s.set == SET_WAKE && s.purpose == "wake-word runtime")
+            .find_map(|s| {
+                s.files
+                    .iter()
+                    .find(|f| {
+                        matches!(
+                            f.name.as_str(),
+                            "onnxruntime.dll" | "libonnxruntime.so" | "libonnxruntime.dylib"
+                        )
+                    })
+                    .map(|f| pin(s, f))
+            })?;
+        Some(OwwFiles {
+            runtime,
+            melspectrogram: one("wake-oww-melspectrogram", "melspectrogram.onnx")?,
+            embedding: one("wake-oww-embedding", "embedding_model.onnx")?,
+            classifier: one("wake-oww-hey-jarvis", "hey_jarvis_v0.1.onnx")?,
+        })
     }
 
     fn set_ready(&self, set: &str) -> bool {
