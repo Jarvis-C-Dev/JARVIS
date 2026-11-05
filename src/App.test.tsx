@@ -316,40 +316,35 @@ describe("App panels (issue #37)", () => {
     expect(settingsBtn).toHaveFocus();
   });
 
-  it("keeps the top bar and the side panel's offset in one sticky block, with approvals inside it", async () => {
+  it("keeps the top bar and the approval cards in one block above the work area", async () => {
     const { container } = render(<App transport={new MockTransport()} />);
     await screen.findByTestId("phase");
     const top = container.querySelector(".app-top");
     expect(top).not.toBeNull();
-    // The header stays visible with the approval cards under it (CSS: position sticky).
+    // The header stays on top with the approval cards under it (the work area scrolls inside itself).
     expect(top?.querySelector("header.app-header")).not.toBeNull();
     expect(
       within(top as HTMLElement).getByRole("navigation", { name: "Panels" }),
     ).toBeInTheDocument();
-    // The conversation is not inside it, so it scrolls underneath.
+    // The conversation is not inside it.
     expect(top?.querySelector(".chat")).toBeNull();
   });
 
-  it("puts the page back where it was when a panel closes, and does not scroll to the button", async () => {
-    // jsdom does not scroll; give the page a scroll position that we can set and read.
-    let top = 0;
-    Object.defineProperty(document.documentElement, "scrollTop", {
-      configurable: true,
-      get: () => top,
-      set: (v: number) => {
-        top = v;
-      },
-    });
+  it("opening and closing a panel never hides or rebuilds the conversation, and never scrolls to the button", async () => {
     const focus = vi.spyOn(HTMLElement.prototype, "focus");
     try {
-      render(<App transport={new MockTransport()} />);
+      const { container } = render(<App transport={new MockTransport()} />);
       await screen.findByTestId("phase");
-      top = 640; // scrolled down the conversation
+      const log = container.querySelector(".chat-scroll") as HTMLElement;
+      expect(log).not.toBeNull();
+      log.scrollTop = 640; // scrolled up the conversation
       await act(async () =>
         fireEvent.click(screen.getByRole("button", { name: "Settings" })),
       );
-      // On a narrow window the conversation is hidden and the page loses its place.
-      top = 0;
+      // The same scroll area is still there, beside the open panel, with the same position.
+      expect(container.querySelector(".chat-scroll")).toBe(log);
+      expect(screen.getByRole("region", { name: "Settings" })).toBeVisible();
+      expect(log.scrollTop).toBe(640);
       await act(async () =>
         fireEvent.click(
           within(screen.getByRole("region", { name: "Settings" })).getByRole(
@@ -358,32 +353,35 @@ describe("App panels (issue #37)", () => {
           ),
         ),
       );
-      expect(top).toBe(640);
-      // Neither moving focus into the panel nor back to its button may scroll the page.
+      expect(container.querySelector(".chat-scroll")).toBe(log);
+      expect(log.scrollTop).toBe(640);
+      // Neither moving focus into the panel nor back to its button may scroll anything.
       const calls = focus.mock.calls.filter(([opts]) => opts !== undefined);
       expect(calls.length).toBeGreaterThanOrEqual(2);
       for (const [opts] of calls) {
         expect(opts).toEqual({ preventScroll: true });
       }
-      // Switching between panels keeps the first saved position, not the one in between.
-      top = 300;
-      await act(async () =>
-        fireEvent.click(screen.getByRole("button", { name: "Activity" })),
-      );
-      top = 0;
-      await act(async () =>
-        fireEvent.click(screen.getByRole("button", { name: "Memory" })),
-      );
-      top = 0;
-      await act(async () =>
-        fireEvent.click(screen.getByRole("button", { name: "Memory" })),
-      );
-      expect(top).toBe(300);
     } finally {
       focus.mockRestore();
-      delete (document.documentElement as unknown as Record<string, unknown>)
-        .scrollTop;
     }
+  });
+
+  it("keeps the talk controls and the conversation in one work area with the panel above it", async () => {
+    const { container } = render(<App transport={new MockTransport()} />);
+    await screen.findByTestId("phase");
+    const main = container.querySelector(".app-main") as HTMLElement;
+    const workspace = main.querySelector("main.workspace") as HTMLElement;
+    // The rail (hologram, status, talk button) and the conversation are side by side.
+    expect(workspace.querySelector("aside.rail .push-to-talk")).not.toBeNull();
+    expect(workspace.querySelector("section.chat")).not.toBeNull();
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Settings" })),
+    );
+    // The panel comes before the workspace (above it), and the workspace is still there.
+    expect(main.firstElementChild).toBe(
+      screen.getByRole("region", { name: "Settings" }),
+    );
+    expect(main.querySelector("main.workspace .push-to-talk")).not.toBeNull();
   });
 
   it("Esc inside a panel closes it and does not cancel the reply; outside it still cancels", async () => {

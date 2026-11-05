@@ -87,11 +87,19 @@ select {
   background: var(--surface);
 }
 
-/* ---- Layout: header, approvals, conversation, one side panel. ---- */
+/* ---- Layout (issue #144): a fixed frame. The header is on top; below it the work area is
+   JARVIS (a narrow column with the hologram, the status and the talk button down the left, the
+   conversation filling the rest) and, when a panel is open, the panel in the top half with JARVIS in
+   the bottom half. The conversation and the panel scroll inside their own areas, so the talk button
+   and the newest messages are always on screen. ---- */
 .app {
+  /* The containing block of the visually hidden labels, so they cannot make the page scroll. */
+  position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .app-header {
@@ -124,71 +132,130 @@ select {
   color: var(--accent-text);
 }
 
-/* The header and the approval cards stay at the top of the window while the conversation scrolls
-   or grows. The cards get their own scroll when there are many, so they never push the
-   conversation off the screen. */
+/* The header and the approval cards stay at the top of the window. The cards get their own scroll
+   when there are many, so they never push the conversation off the screen. */
 .app-top {
-  position: sticky;
-  top: 0;
+  flex: none;
   z-index: 20;
   background: var(--bg);
 }
 
 .approvals {
-  max-height: 45vh;
+  max-height: 35vh;
   overflow-y: auto;
   padding: 0.5rem 1rem 0;
   background: var(--bg);
 }
 
-.app-body {
+/* The work area: the panel (when open) above, JARVIS below; equal halves. */
+.app-main {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
 
-.app.has-panel .app-body {
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 30rem);
+.app.has-panel .app-main {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.assistant {
+/* JARVIS: the rail down the left, the conversation beside it. */
+.workspace {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.rail {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 0.75rem;
-  width: 100%;
-  max-width: 52rem;
-  margin: 0 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 1rem;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
 }
 
-.assistant-status {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.rail > .orb,
+.rail > .hologram-3d,
+.rail > .hologram {
+  align-self: center;
 }
 
-.assistant-status p {
+.rail .status-panel p {
   margin: 0.2rem 0;
 }
 
+.rail .controls {
+  flex-direction: column;
+}
+
+.rail .controls button {
+  width: 100%;
+}
+
+.rail .push-to-talk {
+  padding: 0.9rem 0.6rem;
+  font-size: 1.05rem;
+}
+
+/* With a panel open JARVIS only has half the height, so the rail shrinks: a smaller hologram, and
+   Mute and Cancel side by side under the talk button. */
+.app.has-panel .rail {
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+}
+
+.app.has-panel .rail .hologram-3d {
+  width: 88px;
+  height: 88px;
+}
+
+.app.has-panel .rail .orb svg {
+  width: 88px;
+  height: 88px;
+}
+
+.app.has-panel .rail .controls {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.app.has-panel .rail .controls .push-to-talk {
+  flex: 1 1 100%;
+  padding: 0.5rem 0.6rem;
+  font-size: inherit;
+}
+
+.app.has-panel .rail .controls button:not(.push-to-talk) {
+  flex: 1 1 0;
+  width: auto;
+}
+
+.workspace > [role="alert"] {
+  grid-column: 1 / -1;
+  margin: 0.5rem 1rem;
+}
+
 .side-panel {
-  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-bottom: 2px solid var(--border);
   background: var(--surface);
-  overflow-y: auto;
-  max-height: calc(100vh - var(--app-top-h, 3.5rem));
-  position: sticky;
-  top: var(--app-top-h, 3.5rem);
 }
 
 .side-panel-header {
-  position: sticky;
-  top: 0;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -199,23 +266,50 @@ select {
 }
 
 .side-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0.5rem 1rem 1.5rem;
 }
 
-/* Narrow windows: the panel takes the whole width; Close returns to the chat. */
+/* Narrow windows: the rail becomes a compact strip above the conversation. */
 @media (max-width: 760px) {
-  .app.has-panel .app-body {
+  .workspace {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .app.has-panel .assistant {
-    display: none;
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    max-height: 45vh;
+    padding: 0.5rem 1rem;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
 
-  .side-panel {
-    border-left: none;
-    max-height: none;
-    position: static;
+  .rail .controls {
+    flex-direction: row;
+  }
+
+  .rail .controls button {
+    width: auto;
+  }
+
+  .rail .push-to-talk {
+    padding: 0.4rem 0.6rem;
+    font-size: inherit;
+  }
+
+  .rail .hologram-3d {
+    width: 72px;
+    height: 72px;
+  }
+
+  .rail .orb svg {
+    width: 72px;
+    height: 72px;
   }
 }
 
@@ -311,8 +405,31 @@ kbd {
 .chat {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 1rem 0.5rem;
+}
+
+.chat-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+}
+
+.chat-title {
+  margin-right: auto;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* The conversation scrolls here; the text box below it never moves. */
+.chat-scroll {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.25rem 0.25rem 0.5rem 0;
 }
 
 .chat-log {
@@ -387,12 +504,10 @@ kbd {
 }
 
 .chat-form {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   display: flex;
   gap: 0.5rem;
-  padding: 0.5rem 0;
-  background: var(--bg);
+  padding: 0.5rem 0 0;
 }
 
 .chat-form input {
@@ -724,8 +839,8 @@ blockquote.memory-text {
 
 /* ---- 3D hologram (ADR-015) ---- */
 .hologram-3d {
-  width: 140px;
-  height: 140px;
+  width: 160px;
+  height: 160px;
   flex: none;
 }
 
@@ -746,6 +861,9 @@ blockquote.memory-text {
 
 /* ---- First-run notice (issue #45) ---- */
 .welcome {
+  flex: none;
+  max-height: 40vh;
+  overflow-y: auto;
   max-width: 52rem;
   margin: 0.75rem auto 0;
   padding: 0.75rem 1rem;

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityLog } from "./components/ActivityLog";
 import { ApprovalCard } from "./components/ApprovalCard";
 import { Chat } from "./components/Chat";
@@ -55,43 +49,15 @@ export default function App({ transport }: { transport: Transport }) {
   const navButtons = useRef<Partial<Record<PanelId, HTMLButtonElement | null>>>(
     {},
   );
-  // Where the conversation was scrolled to when a panel was opened. On a narrow window the
-  // conversation is hidden while a panel is open, so the page loses its scroll position; it is
-  // put back when the panel closes, and the person is where they were.
-  const savedScroll = useRef<number | null>(null);
-  const openPanel = (id: PanelId | null) => {
-    if (id !== null && panel === null) {
-      savedScroll.current = document.documentElement.scrollTop;
-    }
-    setPanel(id);
-  };
+  const openPanel = (id: PanelId | null) => setPanel(id);
   const togglePanel = (id: PanelId) => openPanel(panel === id ? null : id);
-  // Closing returns focus to the button that opened the panel, without scrolling to it.
+  // Closing returns focus to the button that opened the panel, without scrolling to it. The
+  // conversation scrolls inside its own area and is never hidden or unmounted by a panel, so it
+  // keeps its place without any bookkeeping here.
   const closePanel = () => {
     if (panel) navButtons.current[panel]?.focus({ preventScroll: true });
     openPanel(null);
   };
-  useLayoutEffect(() => {
-    if (panel === null && savedScroll.current !== null) {
-      document.documentElement.scrollTop = savedScroll.current;
-      savedScroll.current = null;
-    }
-  }, [panel]);
-
-  // The top bar (and any approval cards) stay on screen; the side panel sticks just below them.
-  const topRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = topRef.current;
-    if (!el) return;
-    const root = document.documentElement;
-    const set = () =>
-      root.style.setProperty("--app-top-h", `${el.offsetHeight}px`);
-    set();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(set);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Read the store at call time so the shortcut listener is bound once.
   const run = useCallback((p: Promise<void>) => {
@@ -120,6 +86,9 @@ export default function App({ transport }: { transport: Transport }) {
   );
 
   const turns = useChatStore((s) => s.turns);
+  // Clears what is on the screen only. The saved conversations stay in History, and the model
+  // still has its recent context (a "new conversation" that resets that needs a backend command).
+  const clearChat = useCallback(() => useChatStore.getState().clear(), []);
   const nextKey = useRef(0);
   const onSubmitText = useCallback(
     (text: string) => {
@@ -181,7 +150,7 @@ export default function App({ transport }: { transport: Transport }) {
   return (
     <div className={`app${panel ? " has-panel" : ""}`}>
       {transport.isMock && <MockBadge />}
-      <div className="app-top" ref={topRef}>
+      <div className="app-top">
         <header className="app-header">
           <h1>JARVIS</h1>
           <nav aria-label="Panels" className="app-nav">
@@ -225,33 +194,10 @@ export default function App({ transport }: { transport: Transport }) {
         )}
       </div>
       <WelcomeNotice transport={transport} />
-      <div className="app-body">
-        <main className="assistant">
-          {error && <p role="alert">{error}</p>}
-          {!error && snapshot && (
-            <>
-              <div className="assistant-status">
-                <Hologram phase={snapshot.phase} mic={snapshot.mic} />
-                <div>
-                  <StatusPanel snapshot={snapshot} onRetry={retryTurn} />
-                  <Controls
-                    snapshot={snapshot}
-                    onCancel={onCancel}
-                    onToggleMute={onToggleMute}
-                    onTalkStart={onTalkStart}
-                    onTalkStop={onTalkStop}
-                  />
-                </div>
-              </div>
-              <Chat
-                turns={turns}
-                busy={snapshot.activeRequestId !== null}
-                onSubmit={onSubmitText}
-              />
-            </>
-          )}
-          {commandError && <p role="alert">{commandError}</p>}
-        </main>
+      {/* The window is a fixed frame: header on top, then the work area. A panel takes the top half of
+          the work area and JARVIS stays visible in the bottom half; the conversation and the panel
+          scroll inside their own areas, so nothing moves the page. */}
+      <div className="app-main">
         {panel && (
           <SidePanel
             id={`${panel}-panel`}
@@ -264,6 +210,33 @@ export default function App({ transport }: { transport: Transport }) {
             {panel === "history" && <HistoryPanel transport={transport} />}
           </SidePanel>
         )}
+        <main className="workspace">
+          {error && <p role="alert">{error}</p>}
+          {!error && snapshot && (
+            <>
+              {/* The hologram, the status and the talk button: a narrow column down one side, so
+                  they stay in view however long the conversation gets. */}
+              <aside className="rail" aria-label="JARVIS">
+                <Hologram phase={snapshot.phase} mic={snapshot.mic} />
+                <StatusPanel snapshot={snapshot} onRetry={retryTurn} />
+                <Controls
+                  snapshot={snapshot}
+                  onCancel={onCancel}
+                  onToggleMute={onToggleMute}
+                  onTalkStart={onTalkStart}
+                  onTalkStop={onTalkStop}
+                />
+              </aside>
+              <Chat
+                turns={turns}
+                busy={snapshot.activeRequestId !== null}
+                onSubmit={onSubmitText}
+                onClear={clearChat}
+              />
+            </>
+          )}
+          {commandError && <p role="alert">{commandError}</p>}
+        </main>
       </div>
       {isMock(transport) && (
         <footer className="mock-footer">
