@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 
 import App from "./App";
 import { useChatStore } from "./state/chatStore";
+import { usePanelSplit } from "./state/layoutPref";
 import { useSnapshotStore } from "./state/snapshotStore";
 import { MockTransport } from "./transport/mock/MockTransport";
 import { TauriTransport } from "./transport/tauri";
@@ -366,26 +367,38 @@ describe("App panels (issue #37)", () => {
     }
   });
 
-  it("keeps the talk column beside the conversation, and a panel splits only the conversation side", async () => {
-    const { container } = render(<App transport={new MockTransport()} />);
-    await screen.findByTestId("phase");
-    const workspace = container.querySelector("main.workspace") as HTMLElement;
-    const rail = workspace.querySelector("aside.rail") as HTMLElement;
-    const stage = workspace.querySelector(".stage") as HTMLElement;
-    // The talk column and the stage (the conversation) are side by side.
-    expect(rail.querySelector(".push-to-talk")).not.toBeNull();
-    expect(stage.querySelector("section.chat")).not.toBeNull();
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Settings" })),
-    );
-    // The panel is in the stage, above the conversation; the talk column is not touched.
-    const panel = screen.getByRole("region", { name: "Settings" });
-    expect(stage.firstElementChild).toBe(panel);
-    expect(stage.querySelector("section.chat")).not.toBeNull();
-    expect(workspace.querySelector("aside.rail")).toBe(rail);
-    expect(rail.querySelector(".push-to-talk")).not.toBeNull();
-    expect(rail.contains(panel)).toBe(false);
-  });
+  it.each([
+    ["rail", ".rail-col", "aside.rail"],
+    ["stage", ".stage", "section.chat"],
+    ["both", ".app-main", "main.workspace"],
+  ] as const)(
+    "opens a panel where the person chose (%s) and leaves the rest where it was",
+    async (split, parentSel, nextSel) => {
+      usePanelSplit.setState({ split });
+      try {
+        const { container } = render(<App transport={new MockTransport()} />);
+        await screen.findByTestId("phase");
+        const rail = container.querySelector("aside.rail") as HTMLElement;
+        const chat = container.querySelector("section.chat") as HTMLElement;
+        // Closed: the talk column and the conversation are side by side.
+        expect(rail.querySelector(".push-to-talk")).not.toBeNull();
+        await act(async () =>
+          fireEvent.click(screen.getByRole("button", { name: "Settings" })),
+        );
+        const panel = screen.getByRole("region", { name: "Settings" });
+        const parent = container.querySelector(parentSel) as HTMLElement;
+        // The panel is in the chosen place, above what it shares the space with.
+        expect(panel.parentElement).toBe(parent);
+        expect(panel.nextElementSibling).toBe(container.querySelector(nextSel));
+        // Nothing was rebuilt: the same talk button and conversation are still there.
+        expect(container.querySelector("aside.rail")).toBe(rail);
+        expect(container.querySelector("section.chat")).toBe(chat);
+        expect(rail.querySelector(".push-to-talk")).not.toBeNull();
+      } finally {
+        usePanelSplit.setState({ split: "rail" });
+      }
+    },
+  );
 
   it("Esc inside a panel closes it and does not cancel the reply; outside it still cancels", async () => {
     vi.useFakeTimers();

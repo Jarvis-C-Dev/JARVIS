@@ -147,12 +147,18 @@ select {
   background: var(--bg);
 }
 
-/* The work area is one row: the talk column, then the stage. */
+/* The work area: the talk column and the stage side by side. Where an open panel goes depends on
+   `data-split` on `.app` (the person's choice): `rail` over the talk column (default), `stage` over
+   the conversation, `both` across the whole width above everything. */
 .app-main {
   flex: 1;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+}
+
+.app.has-panel[data-split="both"] .app-main {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 /* JARVIS: the rail down the left, the conversation beside it. */
@@ -163,6 +169,24 @@ select {
   min-width: 0;
 }
 
+/* The talk column: the panel (when it is placed here) above the rail. */
+.rail-col {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+
+.app.has-panel[data-split="rail"] .rail-col {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* The panel needs more room than the narrow column when it is placed over it. */
+.app.has-panel[data-split="rail"] .workspace {
+  grid-template-columns: minmax(22rem, 38%) minmax(0, 1fr);
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -171,7 +195,6 @@ select {
   min-height: 0;
   overflow-y: auto;
   padding: 1rem;
-  border-right: 1px solid var(--border);
   background: var(--surface);
 }
 
@@ -207,8 +230,47 @@ select {
   min-width: 0;
 }
 
-.app.has-panel .stage {
+.app.has-panel[data-split="stage"] .stage {
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* When the panel takes half of the talk column (or half of the window), the rail gets less height:
+   a smaller hologram, and Mute and Cancel side by side under the talk button. */
+.app.has-panel[data-split="rail"] .rail,
+.app.has-panel[data-split="both"] .rail {
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+}
+
+.app.has-panel[data-split="rail"] .rail .hologram-3d,
+.app.has-panel[data-split="both"] .rail .hologram-3d {
+  width: 88px;
+  height: 88px;
+}
+
+.app.has-panel[data-split="rail"] .rail .orb svg,
+.app.has-panel[data-split="both"] .rail .orb svg {
+  width: 88px;
+  height: 88px;
+}
+
+.app.has-panel[data-split="rail"] .rail .controls,
+.app.has-panel[data-split="both"] .rail .controls {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.app.has-panel[data-split="rail"] .rail .controls .push-to-talk,
+.app.has-panel[data-split="both"] .rail .controls .push-to-talk {
+  flex: 1 1 100%;
+  padding: 0.5rem 0.6rem;
+  font-size: inherit;
+}
+
+.app.has-panel[data-split="rail"] .rail .controls button:not(.push-to-talk),
+.app.has-panel[data-split="both"] .rail .controls button:not(.push-to-talk) {
+  flex: 1 1 0;
+  width: auto;
 }
 
 .workspace > [role="alert"] {
@@ -250,19 +312,28 @@ select {
 
 /* Narrow windows: the rail becomes a compact strip above the conversation. */
 @media (max-width: 760px) {
-  .workspace {
+  .workspace,
+  .app.has-panel[data-split="rail"] .workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .rail-col {
+    max-height: 60vh;
+    overflow-y: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .app.has-panel[data-split="rail"] .rail-col {
+    grid-template-rows: auto auto;
   }
 
   .rail {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    max-height: 45vh;
     padding: 0.5rem 1rem;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
   }
 
   .rail .controls {

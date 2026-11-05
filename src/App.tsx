@@ -19,6 +19,7 @@ import { useVoice } from "./hooks/useVoice";
 import { PROTOCOL_VERSION } from "./protocol";
 import { useChatStore } from "./state/chatStore";
 import { describeError } from "./state/errors";
+import { usePanelSplit } from "./state/layoutPref";
 import { useSnapshotStore } from "./state/snapshotStore";
 import type { Transport } from "./transport";
 import type { MockTransport } from "./transport/mock/MockTransport";
@@ -147,8 +148,18 @@ export default function App({ transport }: { transport: Transport }) {
     };
   }, [transport, receive]);
 
+  const split = usePanelSplit((s) => s.split);
+  const panelNode = panel ? (
+    <SidePanel id={`${panel}-panel`} title={PANELS[panel]} onClose={closePanel}>
+      {panel === "settings" && <SettingsPanel transport={transport} />}
+      {panel === "activity" && <ActivityLog transport={transport} />}
+      {panel === "memory" && <MemoryPanel data={memories} />}
+      {panel === "history" && <HistoryPanel transport={transport} />}
+    </SidePanel>
+  ) : null;
+
   return (
-    <div className={`app${panel ? " has-panel" : ""}`}>
+    <div className={`app${panel ? " has-panel" : ""}`} data-split={split}>
       {transport.isMock && <MockBadge />}
       <div className="app-top">
         <header className="app-header">
@@ -194,46 +205,33 @@ export default function App({ transport }: { transport: Transport }) {
         )}
       </div>
       <WelcomeNotice transport={transport} />
-      {/* The window is a fixed frame: the header on top, then the work area. The talk column (hologram,
-          status, talk button) runs down the left and never changes. Beside it is the stage: the
-          conversation, and when a panel is open the stage splits in half with the panel above the
-          conversation. The conversation and the panel scroll inside their own areas, so nothing moves
-          the page. */}
+      {/* The window is a fixed frame: the header on top, then the work area: the talk column (hologram,
+          status, talk button) down the left and the conversation beside it. An open panel goes where
+          the person chose (Settings, Display): over the talk column (`rail`, the default), over the
+          conversation (`stage`), or across the whole width (`both`). Everything scrolls inside its own
+          area, so nothing moves the page. */}
       <div className="app-main">
+        {split === "both" && panelNode}
         <main className="workspace">
           {error && <p role="alert">{error}</p>}
           {!error && snapshot && (
             <>
-              <aside className="rail" aria-label="JARVIS">
-                <Hologram phase={snapshot.phase} mic={snapshot.mic} />
-                <StatusPanel snapshot={snapshot} onRetry={retryTurn} />
-                <Controls
-                  snapshot={snapshot}
-                  onCancel={onCancel}
-                  onToggleMute={onToggleMute}
-                  onTalkStart={onTalkStart}
-                  onTalkStop={onTalkStop}
-                />
-              </aside>
+              <div className="rail-col">
+                {split === "rail" && panelNode}
+                <aside className="rail" aria-label="JARVIS">
+                  <Hologram phase={snapshot.phase} mic={snapshot.mic} />
+                  <StatusPanel snapshot={snapshot} onRetry={retryTurn} />
+                  <Controls
+                    snapshot={snapshot}
+                    onCancel={onCancel}
+                    onToggleMute={onToggleMute}
+                    onTalkStart={onTalkStart}
+                    onTalkStop={onTalkStop}
+                  />
+                </aside>
+              </div>
               <div className="stage">
-                {panel && (
-                  <SidePanel
-                    id={`${panel}-panel`}
-                    title={PANELS[panel]}
-                    onClose={closePanel}
-                  >
-                    {panel === "settings" && (
-                      <SettingsPanel transport={transport} />
-                    )}
-                    {panel === "activity" && (
-                      <ActivityLog transport={transport} />
-                    )}
-                    {panel === "memory" && <MemoryPanel data={memories} />}
-                    {panel === "history" && (
-                      <HistoryPanel transport={transport} />
-                    )}
-                  </SidePanel>
-                )}
+                {split === "stage" && panelNode}
                 <Chat
                   turns={turns}
                   busy={snapshot.activeRequestId !== null}
