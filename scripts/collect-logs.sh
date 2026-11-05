@@ -84,6 +84,7 @@ if [ -z "$win_home" ] && [ -n "${HOME:-}" ] && command -v cygpath >/dev/null 2>&
   win_home="$(cygpath -w "$HOME" 2>/dev/null || true)"
 fi
 if [ -n "$win_home" ]; then
+  add_form "$(printf '%s' "$win_home" | sed 's/\\/\\\\\\\\/g')"   # escaped twice (a debug-printed path inside a JSON line)
   add_form "$(printf '%s' "$win_home" | sed 's/\\/\\\\/g')"   # JSON-escaped: C:\\Users\\name
   add_form "$win_home"                                           # C:\Users\name
   add_form "$(printf '%s' "$win_home" | sed 's|\\|/|g')"          # C:/Users/name
