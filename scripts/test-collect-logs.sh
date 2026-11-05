@@ -42,6 +42,21 @@ LOG
 HOME="$tmp/home" bash "$script" --dir "$logs" --since 2h --out "$out" >/dev/null
 check "masks the home folder" "! grep -q '$tmp/home' '$out' && grep -q '~/secret-folder' '$out'"
 
+# Windows forms of the home folder (Git Bash's $HOME is /c/Users/name, the app logs C:\\Users\\name
+# with the backslashes JSON-escaped). The user name must be gone in every form, in the header too.
+win="$tmp/winlogs"; mkdir -p "$win"
+cat > "$win/jarvis.2026-11-07.log" <<LOG
+{"timestamp":"$recent","level":"ERROR","fields":{"message":"cannot open C:\\\\Users\\\\tester\\\\AppData\\\\x and C:\\Users\\tester\\y and C:/Users/tester/z and /c/Users/tester/w"}}
+LOG
+USERPROFILE='C:\Users\tester' HOME="/c/Users/tester" bash "$script" --dir "$win" --since 2h --out "$out" >/dev/null
+check "masks the Windows home folder in all its forms" "! grep -q 'tester' '$out' && grep -c '~' '$out' | grep -q '^[1-9]'"
+USERPROFILE='C:\Users\tester' HOME="/c/Users/tester" bash "$script" --dir 'C:\Users\tester\logs' --out "$out" >/dev/null
+check "masks it in the header's log folder line too" "! grep -q 'tester' '$out'"
+
+# An empty HOME must not break the masking.
+HOME="" USERPROFILE="" bash "$script" --dir "$logs" --since 2h --out "$out" >/dev/null
+check "works when HOME is empty" "[ -f '$out' ]"
+
 # The cap keeps the newest lines.
 for i in $(seq 1 50); do
   echo "{\"timestamp\":\"$recent\",\"level\":\"INFO\",\"fields\":{\"message\":\"line-$i\"}}" >> "$logs/jarvis.2026-11-06.log"

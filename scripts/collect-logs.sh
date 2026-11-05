@@ -69,15 +69,39 @@ if cutoff="$(date -u -r "$cutoff_epoch" +%Y-%m-%dT%H:%M:%S 2>/dev/null)"; then :
   cutoff="$(date -u -d "@$cutoff_epoch" +%Y-%m-%dT%H:%M:%S)"
 fi
 
-home_escaped="$(printf '%s' "$HOME" | sed 's/[][\.*^$/|]/\\&/g')"
-redact() {
-  sed -E \
-    -e "s|$home_escaped|~|g" \
-    -e 's/[0-9a-fA-F]{32}/***ID***/g' \
-    -e 's/[Bb]earer +[A-Za-z0-9._~+\/=-]+/Bearer ***REDACTED***/g' \
-    -e 's/sk-[A-Za-z0-9_-]{8,}/***REDACTED***/g' \
-    -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***EMAIL***/g'
-}
+# Escapes a literal string for use inside a sed regular expression (including backslashes).
+sed_escape() { printf '%s' "$1" | sed 's/[][\.*^$/|]/\\&/g'; }
+
+# Every way the home folder can appear in a log line becomes "~". On Windows the app writes
+# `C:\Users\name\...` into its JSON lines as `C:\\Users\\name\\...` (backslashes escaped), while
+# Git Bash's $HOME is `/c/Users/name`, so each form is masked: the Git Bash path, the Windows path
+# (from USERPROFILE or `cygpath -w`) with single backslashes, JSON-escaped backslashes, and slashes.
+home_forms=()
+add_form() { [ -n "$1" ] && [ "$1" != "/" ] && home_forms+=("$1") || true; }
+add_form "${HOME:-}"
+win_home="${USERPROFILE:-}"
+if [ -z "$win_home" ] && [ -n "${HOME:-}" ] && command -v cygpath >/dev/null 2>&1; then
+  win_home="$(cygpath -w "$HOME" 2>/dev/null || true)"
+fi
+if [ -n "$win_home" ]; then
+  add_form "$(printf '%s' "$win_home" | sed 's/\\/\\\\/g')"   # JSON-escaped: C:\\Users\\name
+  add_form "$win_home"                                           # C:\Users\name
+  add_form "$(printf '%s' "$win_home" | sed 's|\\|/|g')"          # C:/Users/name
+fi
+
+sed_args=(
+  -e 's/[0-9a-fA-F]{32}/***ID***/g'
+  -e 's/[Bb]earer +[A-Za-z0-9._~+\/=-]+/Bearer ***REDACTED***/g'
+  -e 's/sk-[A-Za-z0-9_-]{8,}/***REDACTED***/g'
+  -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***EMAIL***/g'
+)
+# Home forms first, longest first, so a longer form is not left half masked by a shorter one.
+if [ "${#home_forms[@]}" -gt 0 ]; then
+  while IFS= read -r form; do
+    sed_args=(-e "s|$(sed_escape "$form")|~|g" "${sed_args[@]}")
+  done < <(printf '%s\n' "${home_forms[@]}" | awk '{ print length($0) "\t" $0 }' | sort -n | cut -f2-)
+fi
+redact() { sed -E "${sed_args[@]}"; }
 
 mkdir -p "$(dirname "$out")"
 
