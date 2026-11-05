@@ -279,9 +279,9 @@ mod tests {
         let d = PathBuf::from(d);
         let bytes = std::fs::read(d.join("test_wavs/0.wav")).unwrap();
         // A plain 44-byte header, then 16-bit little-endian samples.
-        let audio: Vec<f32> = bytes[44..]
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
+        let pcm = &bytes[44..];
+        let audio: Vec<f32> = (0..pcm.len() / 2)
+            .map(|i| i16::from_le_bytes([pcm[2 * i], pcm[2 * i + 1]]) as f32 / 32768.0)
             .collect();
         let expected = std::fs::read_to_string(d.join("test_wavs/trans.txt")).unwrap();
         let expected = expected
