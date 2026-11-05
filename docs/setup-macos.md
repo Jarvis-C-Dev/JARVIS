@@ -39,7 +39,7 @@ Since macOS 15 Sequoia, Control-clicking or right-clicking no longer bypasses Ga
 10. Click **Open Anyway** next to that message (not checked on a Mac).
 11. When prompted, enter your Mac user password or use Touch ID, then click **Open** on the final confirmation prompt (not checked on a Mac).
 
-You only need to complete the **Open Anyway** steps the first time you run a newly downloaded build.
+You only need to complete the **Open Anyway** steps the first time you run a newly downloaded build. Next, follow [`docs/first-run.md`](first-run.md) to add your API key and try your first typed commands.
 
 ## 3. Permissions macOS asks for and why
 
@@ -49,7 +49,7 @@ macOS requires apps to request user permissions before accessing sensitive syste
 
 macOS requires every audio capture app to declare a microphone description (`NSMicrophoneUsageDescription`), otherwise audio capture silently returns zeros (spec §6.7).
 
-- **Current status**: voice input is **not built yet**, so JARVIS does not access your microphone today and macOS will not prompt for microphone access in the current alpha.
+- **Current status**: voice input is **not built yet**, so JARVIS does not access your microphone today and macOS will not prompt for microphone access in the current alpha (this changes in a later alpha as push-to-talk lands).
 - **When voice arrives**: once voice input is enabled in a future release, macOS will prompt you to grant microphone permission the first time voice capture is used.
 - If you ever need to check or grant microphone permission later, go to **System Settings** → **Privacy & Security** → **Microphone** and ensure the toggle for **JARVIS** is turned on (not checked on a Mac).
 
@@ -66,7 +66,8 @@ In `src-tauri/Info.plist`, JARVIS declares:
 - **If permission was denied**: if you clicked "Don't Allow", the music command will report that permission is needed. To grant permission, open **System Settings** → **Privacy & Security** → **Automation**, find **JARVIS**, and turn on the checkmark for **Spotify** or **Music** (not checked on a Mac).
 - **Player rules on macOS** (`docs/known-limitations.md`):
   - Controls reach the Spotify and Music apps only (not web browsers or other players).
-  - A player that is not already open is never launched automatically.
+  - The music controls never start a player. Asking for a song by name (`play <song>`), a playlist, or liked songs starts Spotify if it is closed (decision D-25).
+  - Playing music by name (`play <words>`) needs a one-time Spotify setup under **Settings** → **Music**; see [`docs/known-limitations.md`](known-limitations.md).
   - If both Spotify and Music are open, whichever player is currently playing is used (Spotify first on a tie).
   - Volume moves by approximately 10% per command, and `mute the music` toggles system sound mute.
 
