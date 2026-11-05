@@ -402,6 +402,13 @@ export class MockTransport implements Transport {
     );
   }
 
+  /**
+   * Contract `voice_capture_tap`: accepted, no effect yet, like the backend until Developer A's side
+   * lands (issue #143). The mock still ends an unstopped capture by itself after a short while; it will
+   * hold the capture until a tap, as the contract says, together with the window change that sends it.
+   */
+  async voiceCaptureTap(): Promise<void> {}
+
   /** Nothing is heard in the mock: key up plays a fixed, labelled sentence as the transcript. */
   async voiceCaptureStop(): Promise<void> {
     const listener = this.voiceListener;

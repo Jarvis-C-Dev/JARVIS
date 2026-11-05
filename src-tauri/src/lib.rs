@@ -234,6 +234,7 @@ pub fn run() {
             ipc::commands::voice_devices,
             ipc::commands::voice_capture_start,
             ipc::commands::voice_capture_stop,
+            ipc::commands::voice_capture_tap,
             ipc::commands::voice_models_install,
             ipc::commands::resolve_approval,
             ipc::commands::activity_list,
