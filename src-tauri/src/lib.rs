@@ -11,6 +11,7 @@ mod services;
 mod spotify;
 mod tools;
 mod voice;
+mod wake;
 
 use config::SettingsStore;
 use intelligence::pricing::PriceTable;
