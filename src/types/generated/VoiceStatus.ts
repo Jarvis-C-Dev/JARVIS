@@ -31,8 +31,10 @@ inputDevice: string | null, micPermission: MicPermission,
  */
 modelsReady: boolean, 
 /**
- * This computer has a wake word download (Windows x64, macOS Apple silicon, Linux x64). When
- * false the window should not offer the wake word at all, and `wakeEnabled` cannot be set.
+ * The wake word is offered on this computer: Windows x64 and Linux x64 for now. macOS is not
+ * (D-29: the installed Mac app's hardened runtime blocks the downloaded library until the owner
+ * decides otherwise). When false the window must not offer the wake word at all, and
+ * `wakeEnabled: true` is refused.
  */
 wakeSupported: boolean, 
 /**

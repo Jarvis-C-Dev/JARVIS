@@ -585,13 +585,15 @@ mod tests {
         assert!(s.available_voices.is_empty() && s.input_device.is_none());
         let s = svc
             .voice_settings_set(&VoiceSettingsPatch {
-                wake_enabled: Some(true),
+                // Where the wake word is not offered (macOS) turning it on is refused, tested below.
+                wake_enabled: crate::voice::models::wake_supported().then_some(true),
                 wake_notice_accepted: Some(true),
                 input_device: Some(Some("Realtek".into())),
                 ..Default::default()
             })
             .unwrap();
-        assert!(s.wake_enabled && s.wake_notice_accepted && s.wake_supported);
+        assert_eq!(s.wake_enabled, crate::voice::models::wake_supported());
+        assert!(s.wake_notice_accepted);
         assert_eq!(s.input_device.as_deref(), Some("Realtek"));
         assert_eq!(svc.voice_status(), s);
         // The voice choices are not part of Settings, so the settings contract is untouched.
@@ -628,7 +630,13 @@ mod tests {
             })
             .unwrap_err();
         assert_eq!(e.code, ErrorCode::Internal);
-        assert!(e.message.contains("notice") && !e.retryable);
+        // Offered here: the notice is what is missing. Not offered (macOS): that is said first.
+        let expected = if crate::voice::models::wake_supported() {
+            "notice"
+        } else {
+            "not available"
+        };
+        assert!(e.message.contains(expected) && !e.retryable);
         assert!(!svc.voice_status().wake_enabled && !svc.voice_status().wake_notice_accepted);
     }
 }

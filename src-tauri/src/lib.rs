@@ -186,7 +186,10 @@ pub fn run() {
                 wanted: Box::new(move || {
                     let v = wake_settings.settings.get().voice;
                     // Nothing listens without the licence notice having been accepted.
-                    v.wake_enabled && v.wake_notice_accepted && wake_models.wake_ready()
+                    v.wake_enabled
+                        && v.wake_notice_accepted
+                        && voice::models::wake_supported()
+                        && wake_models.wake_ready()
                 }),
                 load: Box::new(move || {
                     let files = load_models.wake_files().ok_or_else(|| {

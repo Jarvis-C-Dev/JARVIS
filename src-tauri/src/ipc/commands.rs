@@ -391,7 +391,7 @@ pub async fn voice_models_install(
     // The wake word's files are fetched only once the person has accepted the notice and switched
     // it on (D-28, D-29).
     let v = svc.settings.get().voice;
-    if v.wake_enabled && v.wake_notice_accepted {
+    if v.wake_enabled && v.wake_notice_accepted && crate::voice::models::wake_supported() {
         let for_events = app.clone();
         models
             .install_set(crate::voice::models::SET_WAKE, &move |p| {
