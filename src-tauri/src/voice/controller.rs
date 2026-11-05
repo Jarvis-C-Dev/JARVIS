@@ -67,6 +67,7 @@ struct Active {
     /// Set by the key release: end the capture and use what was said.
     stop: Arc<AtomicBool>,
     /// Set by a cancel: drop everything.
+    #[cfg_attr(not(test), allow(dead_code))] // read by `cancel`, which the wake word will call
     cancel: CancellationToken,
 }
 
@@ -233,7 +234,10 @@ impl VoiceController {
         }
     }
 
-    /// Cancel: drop the audio and return to idle at once. Safe when nothing is capturing.
+    /// Cancel: drop the audio and return to idle at once. Safe when nothing is capturing. The window
+    /// does not need it (Esc and mute end a capture through the orchestrator, see `session`); the
+    /// wake word, which has no key, will.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn cancel(&self) {
         let Some((id, token)) = lock(&self.active)
             .as_ref()

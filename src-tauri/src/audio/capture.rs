@@ -310,6 +310,10 @@ fn drain(ring: &mut Consumer<f32>, scratch: &mut Vec<f32>) {
 
 #[cfg(test)]
 mod tests {
+    /// How long a test waits for the capture thread to end. It only bounds a hang, so it is
+    /// generous: a loaded machine (CI, a full test run) must not fail a test that is not about speed.
+    const JOIN_LIMIT: Duration = Duration::from_secs(10);
+
     use super::*;
     use rtrb::{Producer, RingBuffer};
     use std::collections::VecDeque;
@@ -441,7 +445,7 @@ mod tests {
         );
         assert_eq!(cap.pre_roll().len(), n);
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -461,7 +465,7 @@ mod tests {
         assert_eq!(fake.asked.lock().unwrap().len(), 3);
         assert!(fake.asked.lock().unwrap().iter().all(|d| d.is_none()));
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -508,7 +512,7 @@ mod tests {
         });
         assert!(cap.pre_roll().len() <= got.lock().unwrap().len() - before + 1);
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -525,7 +529,7 @@ mod tests {
         }
         wait_for("the 1000 samples", || got.lock().unwrap().len() >= 990);
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -536,7 +540,7 @@ mod tests {
         let closed = fake.streams.lock().unwrap()[0].closed.clone();
         let t = Instant::now();
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
         assert!(
             t.elapsed() < Duration::from_millis(500),
             "{:?}",
@@ -564,7 +568,7 @@ mod tests {
         wait_for("first attempt", || !fake.asked.lock().unwrap().is_empty());
         let t = Instant::now();
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
         assert!(t.elapsed() < Duration::from_millis(500));
     }
 
@@ -577,7 +581,7 @@ mod tests {
             }
         }
         let mut cap = Capture::start(Boom, None, Duration::from_millis(10), |_| {}, |_| {});
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
         assert_eq!(cap.status(), CaptureStatus::Stopped);
     }
 
@@ -618,7 +622,7 @@ mod tests {
         }
         wait_for("audio from the headset", || !got.lock().unwrap().is_empty());
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -630,7 +634,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(400)); // many checks' worth
         assert_eq!(fake.streams.lock().unwrap().len(), 1);
         cap.stop();
-        assert!(cap.join(Duration::from_secs(2)));
+        assert!(cap.join(JOIN_LIMIT));
     }
 
     #[test]
@@ -645,7 +649,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(400));
             assert_eq!(fake.streams.lock().unwrap().len(), 1, "unknown {unknown}");
             cap.stop();
-            assert!(cap.join(Duration::from_secs(2)));
+            assert!(cap.join(JOIN_LIMIT));
         }
     }
 }
