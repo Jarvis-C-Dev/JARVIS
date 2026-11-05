@@ -99,6 +99,7 @@ impl Services {
             allowed_folders: s.allowed_folders,
             allowed_apps: s.allowed_apps,
             auto_allow_medium: s.auto_allow_medium,
+            max_tool_calls: s.max_tool_calls,
         }
     }
 
@@ -111,6 +112,7 @@ impl Services {
                 | SettingsError::BadFolder(_)
                 | SettingsError::UnknownApp(_)
                 | SettingsError::BadClientId
+                | SettingsError::BadMaxToolCalls
                 | SettingsError::BadVoice
                 | SettingsError::BadDevice
                 | SettingsError::TooMany => err(ErrorCode::Internal, &e.to_string(), false),
