@@ -29,4 +29,21 @@ inputDevice: string | null, micPermission: MicPermission,
 /**
  * True once every voice model file is downloaded and its checksum verified.
  */
-modelsReady: boolean, };
+modelsReady: boolean, 
+/**
+ * This computer has a wake word download (Windows x64, macOS Apple silicon, Linux x64). When
+ * false the window should not offer the wake word at all, and `wakeEnabled` cannot be set.
+ */
+wakeSupported: boolean, 
+/**
+ * True once the wake word's files (the ONNX Runtime library and the three models) are
+ * downloaded and verified. Read live, like `modelsReady`. `wakeEnabled` with `wakeReady`
+ * false means the files still have to be downloaded (`voice_models_install`).
+ */
+wakeReady: boolean, 
+/**
+ * The person has read and accepted the wake word's licence notice (CC BY-NC-SA 4.0, personal
+ * non-commercial use). `wakeEnabled` cannot be turned on without it, and nothing listens
+ * without it.
+ */
+wakeNoticeAccepted: boolean, };

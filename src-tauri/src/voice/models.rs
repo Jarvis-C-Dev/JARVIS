@@ -229,6 +229,13 @@ impl ModelSpec {
     }
 }
 
+/// True when this system has a wake word download (a runtime for it, and the models).
+pub fn wake_supported() -> bool {
+    for_platform(manifest(), current_platform())
+        .iter()
+        .any(|s| s.set == SET_WAKE)
+}
+
 /// The models this app version knows about.
 pub fn manifest() -> &'static [ModelSpec] {
     static M: LazyLock<Vec<ModelSpec>> = LazyLock::new(|| {

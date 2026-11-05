@@ -370,6 +370,17 @@ pub struct VoiceStatus {
     pub mic_permission: MicPermission,
     /// True once every voice model file is downloaded and its checksum verified.
     pub models_ready: bool,
+    /// This computer has a wake word download (Windows x64, macOS Apple silicon, Linux x64). When
+    /// false the window should not offer the wake word at all, and `wakeEnabled` cannot be set.
+    pub wake_supported: bool,
+    /// True once the wake word's files (the ONNX Runtime library and the three models) are
+    /// downloaded and verified. Read live, like `modelsReady`. `wakeEnabled` with `wakeReady`
+    /// false means the files still have to be downloaded (`voice_models_install`).
+    pub wake_ready: bool,
+    /// The person has read and accepted the wake word's licence notice (CC BY-NC-SA 4.0, personal
+    /// non-commercial use). `wakeEnabled` cannot be turned on without it, and nothing listens
+    /// without it.
+    pub wake_notice_accepted: bool,
 }
 
 /// Partial update of the voice settings. Omit a field to leave it unchanged; `inputDevice: null`
@@ -391,6 +402,11 @@ pub struct VoiceSettingsPatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "string | null")]
     pub input_device: Option<Option<String>>,
+    /// Record that the wake word's licence notice was shown and accepted. `wakeEnabled: true` is
+    /// refused unless this is already true or is sent as true in the same patch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub wake_notice_accepted: Option<bool>,
 }
 
 /// The audio devices this computer has, by the name the system gives them.
@@ -744,13 +760,16 @@ mod tests {
             input_device: None,
             mic_permission: MicPermission::Unknown,
             models_ready: false,
+            wake_supported: true,
+            wake_ready: false,
+            wake_notice_accepted: false,
         };
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["micPermission"], "unknown");
         assert_eq!(v["followUpWindow"], true);
         assert!(v["inputDevice"].is_null());
         // The status never grows a path, a secret or audio by accident.
-        assert_eq!(v.as_object().unwrap().len(), 7);
+        assert_eq!(v.as_object().unwrap().len(), 10);
         let t = serde_json::to_value(Transcript {
             request_id: "r".into(),
             text: "hello".into(),
