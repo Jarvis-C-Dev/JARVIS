@@ -299,6 +299,12 @@ impl VoiceController {
             let n = self.orch.snapshot();
             n.mic == MicState::Muted || n.active_request_id.as_deref() != Some(id)
         };
+        // The device is open: only now is the microphone `capturing`, which is the cue to speak.
+        let mut on_open = || {
+            if let Ok(snap) = self.orch.mic_open(id) {
+                self.sink.snapshot(snap);
+            }
+        };
         let outcome = collect(
             &rx,
             &mut endpoint,
@@ -306,6 +312,7 @@ impl VoiceController {
             cancel,
             &muted,
             self.cfg.no_audio_timeout,
+            &mut on_open,
         );
         capture.stop();
         drop(capture);
@@ -346,7 +353,19 @@ impl VoiceController {
             Ok(snap) => self.sink.snapshot(snap),
             Err(_) => return, // cancelled in the meantime: the orchestrator already moved on
         }
+        let began = std::time::Instant::now();
         let text = self.transcribe_bounded(audio);
+        match &text {
+            Ok(t) => tracing::info!(
+                ms = began.elapsed().as_millis() as u64,
+                words = t.split_whitespace().count(),
+                "voice: recognised"
+            ),
+            Err(_) => tracing::info!(
+                ms = began.elapsed().as_millis() as u64,
+                "voice: recognition gave no text"
+            ),
+        }
         if cancel.is_cancelled() {
             return; // `cancel` already returned the assistant to idle
         }
@@ -418,8 +437,23 @@ impl VoiceController {
     }
 }
 
+/// One line about how a capture ended: facts only, never audio and never text. It tells apart the
+/// usual causes of a garbled sentence: cut short by a pause or by the key, too quiet, or too long.
+fn log_capture_end(why: &str, audio: &[f32]) {
+    let peak = audio.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+    tracing::info!(
+        why,
+        seconds = format!("{:.1}", audio.len() as f32 / 16_000.0),
+        peak = format!("{peak:.2}"),
+        "voice: capture ended"
+    );
+}
+
 /// Collects audio until speech ends, the key is released, the capture is cancelled or the
-/// microphone is lost.
+/// microphone is lost. **A mute or a cancel always wins**: if one is in force at the moment a result
+/// is handed over, the audio is dropped. Without this, a mute that lands a few milliseconds before
+/// the window's "key released" (which follows every mute) could be overtaken by it inside one
+/// 20 ms pass of the loop, and what was said would be sent after the person muted.
 fn collect(
     rx: &Receiver<Msg>,
     endpoint: &mut Endpointer,
@@ -427,6 +461,23 @@ fn collect(
     cancel: &CancellationToken,
     muted: &dyn Fn() -> bool,
     no_audio_timeout: Duration,
+    on_open: &mut dyn FnMut(),
+) -> Outcome {
+    let outcome = collect_until_done(rx, endpoint, stop, cancel, muted, no_audio_timeout, on_open);
+    match outcome {
+        Outcome::Audio(_) if cancel.is_cancelled() || muted() => Outcome::Cancelled,
+        other => other,
+    }
+}
+
+fn collect_until_done(
+    rx: &Receiver<Msg>,
+    endpoint: &mut Endpointer,
+    stop: &AtomicBool,
+    cancel: &CancellationToken,
+    muted: &dyn Fn() -> bool,
+    no_audio_timeout: Duration,
+    on_open: &mut dyn FnMut(),
 ) -> Outcome {
     let mut audio: Vec<f32> = Vec::new();
     let started = std::time::Instant::now();
@@ -439,14 +490,37 @@ fn collect(
         }
         match rx.recv_timeout(Duration::from_millis(20)) {
             Ok(Msg::Audio(c)) => {
+                if audio.is_empty() {
+                    tracing::info!(
+                        ms = started.elapsed().as_millis() as u64,
+                        "voice: first sound arrived"
+                    );
+                }
                 audio.extend_from_slice(&c);
                 match endpoint.push(&c) {
                     Decision::Continue => {}
-                    Decision::SpeechEnded | Decision::TooLong => return Outcome::Audio(audio),
-                    Decision::NoSpeech => return Outcome::NoSpeech,
+                    Decision::SpeechEnded => {
+                        log_capture_end("a pause after speech", &audio);
+                        return Outcome::Audio(audio);
+                    }
+                    Decision::TooLong => {
+                        log_capture_end("the 15 s limit", &audio);
+                        return Outcome::Audio(audio);
+                    }
+                    Decision::NoSpeech => {
+                        log_capture_end("no speech heard", &audio);
+                        return Outcome::NoSpeech;
+                    }
                 }
             }
             Ok(Msg::Status(CaptureStatus::Unavailable(e))) => return Outcome::Lost(e),
+            Ok(Msg::Status(CaptureStatus::Running { .. })) => {
+                tracing::info!(
+                    ms = started.elapsed().as_millis() as u64,
+                    "voice: microphone open"
+                );
+                on_open();
+            }
             Ok(Msg::Status(_)) | Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => {
                 return Outcome::Lost(AudioError::Failed("capture ended".into()));
@@ -461,8 +535,10 @@ fn collect(
                 }
             }
             return if endpoint.has_speech() {
+                log_capture_end("the key was released", &audio);
                 Outcome::Audio(audio)
             } else {
+                log_capture_end("the key was released, no speech heard", &audio);
                 Outcome::NoSpeech
             };
         }
@@ -669,9 +745,15 @@ mod tests {
     async fn a_spoken_phrase_becomes_a_transcript_and_a_normal_turn() {
         let s = setup(phrase(), false, None, Box::new(Says("what can you do")));
         s.ctl.start_capture().unwrap();
-        // The phase went listening with the microphone capturing, then the turn ran and ended.
+        // The phase went listening at once, the microphone became capturing when the device had
+        // opened, then the turn ran and ended.
         assert_eq!(s.sink.snaps_first().phase, AssistantPhase::Listening);
-        assert_eq!(s.sink.snaps_first().mic, MicState::Capturing);
+        assert_eq!(s.sink.snaps_first().mic, MicState::Off);
+        wait_for("the microphone to report capturing", || {
+            lock(&s.sink.snaps)
+                .iter()
+                .any(|n| n.phase == AssistantPhase::Listening && n.mic == MicState::Capturing)
+        });
         wait_for("the turn to end", || {
             !s.sink.text().is_empty() && s.orch.snapshot().phase == AssistantPhase::Idle
         });
@@ -947,5 +1029,87 @@ mod tests {
         wait_for("the controller to let go", || lock(&s.ctl.active).is_none());
         assert!(lock(&s.sink.heard).is_empty());
         assert_eq!(s.orch.snapshot().phase, AssistantPhase::Idle);
+    }
+
+    /// A microphone that takes a while to open, as a real device can (Windows, a busy driver).
+    struct SlowOpen(Mic);
+    impl Backend for SlowOpen {
+        fn open(&mut self, device: Option<&str>) -> Result<Opened, AudioError> {
+            std::thread::sleep(Duration::from_millis(400));
+            self.0.open(device)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_microphone_only_reports_capturing_once_a_slow_device_has_opened() {
+        let mut script = tone(300, 0.002);
+        script.extend(tone(900, 0.3));
+        let opened = Arc::new(AtomicU64::new(0));
+        let o = opened.clone();
+        let s = setup_with(
+            Box::new(move || {
+                Box::new(SlowOpen(Mic {
+                    script: script.clone(),
+                    lost: false,
+                    fail: None,
+                    opened: o.clone(),
+                }))
+            }),
+            opened,
+            Box::new(Says("never")),
+            Duration::from_secs(20),
+        );
+        s.ctl.start_capture().unwrap();
+        // Right after the press: listening, but the device is not open, so not capturing.
+        let n = s.orch.snapshot();
+        assert_eq!((n.phase, n.mic), (AssistantPhase::Listening, MicState::Off));
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(s.orch.snapshot().mic, MicState::Off, "still opening");
+        // Then it is open, and only then capturing: the cue to speak.
+        wait_for("capturing", || s.orch.snapshot().mic == MicState::Capturing);
+        assert_eq!(s.orch.snapshot().phase, AssistantPhase::Listening);
+        s.ctl.cancel();
+    }
+
+    #[test]
+    fn a_mute_that_lands_with_the_key_release_still_discards_what_was_heard() {
+        // Speech with no quiet after it; the key release is already flagged.
+        let (tx, rx) = mpsc::channel::<Msg>();
+        let mut a = tone(300, 0.002);
+        a.extend(tone(900, 0.3));
+        tx.send(Msg::Audio(a)).unwrap();
+        let stop = AtomicBool::new(true);
+        let cancel = CancellationToken::new();
+        // Not muted at the top of the loop, muted a moment later: the order that went wrong on a
+        // real laptop (mute, then the window's release, inside one pass of the loop).
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let muted = || calls.fetch_add(1, Ordering::SeqCst) >= 1;
+        let mut ep = Endpointer::new(EndpointConfig::default());
+        let out = collect(
+            &rx,
+            &mut ep,
+            &stop,
+            &cancel,
+            &muted,
+            Duration::from_secs(5),
+            &mut || {},
+        );
+        assert!(matches!(out, Outcome::Cancelled));
+        // Without a mute the same input is used, as a release should.
+        let (tx, rx) = mpsc::channel::<Msg>();
+        let mut a = tone(300, 0.002);
+        a.extend(tone(900, 0.3));
+        tx.send(Msg::Audio(a)).unwrap();
+        let mut ep = Endpointer::new(EndpointConfig::default());
+        let out = collect(
+            &rx,
+            &mut ep,
+            &stop,
+            &cancel,
+            &|| false,
+            Duration::from_secs(5),
+            &mut || {},
+        );
+        assert!(matches!(out, Outcome::Audio(_)));
     }
 }
