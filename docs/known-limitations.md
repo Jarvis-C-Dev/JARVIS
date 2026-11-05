@@ -3,7 +3,7 @@
 What does not work yet, and what to expect. Updated with the code; if you find something not listed, tell us.
 
 ## Not built yet
-- **Voice**: no wake word, speech-to-text or spoken replies. Typing only.
+- **Voice**: push to talk opens the microphone and finds the end of your sentence, but the speech model is not installed yet, so nothing is turned into text; no wake word or spoken replies. Typing only. A request you speak will always show its approval card for a file move or rename, even if you allowed routine actions to run without asking (D-27).
 - **Apps and files**: it can open apps you allowed, but it cannot close them or pass them files. It reads **plain
   text** files only (not Word, PDF or spreadsheets), up to 1 MB. It cannot delete files, and never overwrites
   one when moving or renaming.

@@ -9,7 +9,7 @@
 use super::endpoint::{Decision, EndpointConfig, Endpointer};
 use super::transcribe::{Transcriber, VoiceError};
 use crate::audio::capture::{AudioError, Backend, Capture, CaptureStatus, RETRY_EVERY};
-use crate::ipc::types::{ErrorCode, JarvisError, Transcript};
+use crate::ipc::types::{ErrorCode, JarvisError, MicState, Transcript};
 use crate::orchestrator::turn::{TurnRunner, TurnSink};
 use crate::orchestrator::{Orchestrator, TransitionError};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,6 +32,9 @@ pub struct VoiceConfig {
     pub transcribe_timeout: Duration,
     /// How often the capture engine retries a microphone it could not open.
     pub retry: Duration,
+    /// Give up if no audio at all arrives this long after the start: a microphone that hangs while
+    /// it opens (macOS asking for permission) must not leave a hands-free start listening forever.
+    pub no_audio_timeout: Duration,
 }
 
 impl Default for VoiceConfig {
@@ -40,6 +43,7 @@ impl Default for VoiceConfig {
             endpoint: EndpointConfig::default(),
             transcribe_timeout: Duration::from_secs(10),
             retry: RETRY_EVERY,
+            no_audio_timeout: Duration::from_secs(20),
         }
     }
 }
@@ -74,6 +78,8 @@ enum Msg {
 enum Outcome {
     Audio(Vec<f32>),
     NoSpeech,
+    /// Not one chunk of audio arrived in time: the microphone never started.
+    NoAudio,
     Cancelled,
     Lost(AudioError),
 }
@@ -281,13 +287,37 @@ impl VoiceController {
             },
         );
         let mut endpoint = Endpointer::new(self.cfg.endpoint);
-        let outcome = collect(&rx, &mut endpoint, stop, cancel);
+        // The capture ends at once when the person mutes (the button, the hotkey, a typed or a
+        // spoken "mute") or when the request is cancelled from outside (Esc, "stop"): the
+        // orchestrator's snapshot is the single place that is looked at, so the microphone can
+        // never keep recording for a request that is over.
+        let muted = || {
+            let n = self.orch.snapshot();
+            n.mic == MicState::Muted || n.active_request_id.as_deref() != Some(id)
+        };
+        let outcome = collect(
+            &rx,
+            &mut endpoint,
+            stop,
+            cancel,
+            &muted,
+            self.cfg.no_audio_timeout,
+        );
         capture.stop();
         drop(capture);
         match outcome {
             Outcome::Cancelled => self.end_cancelled(id),
             Outcome::Lost(e) => self.fail(id, audio_error(&e, id)),
             Outcome::NoSpeech => self.no_speech(id),
+            Outcome::NoAudio => self.fail(
+                id,
+                err(
+                    ErrorCode::DeviceLost,
+                    "The microphone did not start. Check that JARVIS is allowed to use it.",
+                    true,
+                    Some(id),
+                ),
+            ),
             Outcome::Audio(audio) => self.recognise(id, audio, cancel),
         }
     }
@@ -391,11 +421,17 @@ fn collect(
     endpoint: &mut Endpointer,
     stop: &AtomicBool,
     cancel: &CancellationToken,
+    muted: &dyn Fn() -> bool,
+    no_audio_timeout: Duration,
 ) -> Outcome {
     let mut audio: Vec<f32> = Vec::new();
+    let started = std::time::Instant::now();
     loop {
-        if cancel.is_cancelled() {
+        if cancel.is_cancelled() || muted() {
             return Outcome::Cancelled;
+        }
+        if audio.is_empty() && started.elapsed() >= no_audio_timeout {
+            return Outcome::NoAudio;
         }
         match rx.recv_timeout(Duration::from_millis(20)) {
             Ok(Msg::Audio(c)) => {
@@ -557,6 +593,29 @@ mod tests {
         fail: Option<AudioError>,
         t: Box<dyn Transcriber>,
     ) -> Setup {
+        let opened = Arc::new(AtomicU64::new(0));
+        let o = opened.clone();
+        setup_with(
+            Box::new(move || {
+                Box::new(Mic {
+                    script: script.clone(),
+                    lost,
+                    fail: fail.clone(),
+                    opened: o.clone(),
+                })
+            }),
+            opened,
+            t,
+            Duration::from_secs(20),
+        )
+    }
+
+    fn setup_with(
+        backend: Box<BackendFactory>,
+        opened: Arc<AtomicU64>,
+        t: Box<dyn Transcriber>,
+        no_audio_timeout: Duration,
+    ) -> Setup {
         let orch = Arc::new(Orchestrator::default());
         let spend = Arc::new(SpendMeter::new(Caps::default(), Day::from_unix_secs(NOW)));
         let runner = Arc::new(TurnRunner::new(
@@ -573,25 +632,17 @@ mod tests {
             Box::new(|| NOW),
         ));
         let sink = Arc::new(Rec::default());
-        let opened = Arc::new(AtomicU64::new(0));
-        let o = opened.clone();
         let ctl = VoiceController::new(
             orch.clone(),
             runner,
             sink.clone(),
-            Box::new(move || {
-                Box::new(Mic {
-                    script: script.clone(),
-                    lost,
-                    fail: fail.clone(),
-                    opened: o.clone(),
-                })
-            }),
+            backend,
             Box::new(|| Some("Fake mic".into())),
             t,
             VoiceConfig {
                 transcribe_timeout: Duration::from_millis(300),
                 retry: Duration::from_millis(20),
+                no_audio_timeout,
                 ..VoiceConfig::default()
             },
         );
@@ -824,5 +875,73 @@ mod tests {
     fn the_audio_error_messages_never_carry_driver_text() {
         let e = audio_error(&AudioError::Failed("secret driver detail".into()), "r");
         assert!(!e.message.contains("secret"));
+    }
+
+    /// A microphone whose `open` never returns (macOS waiting for the person to answer its
+    /// permission question).
+    struct Hangs;
+    impl Backend for Hangs {
+        fn open(&mut self, _device: Option<&str>) -> Result<Opened, AudioError> {
+            std::thread::sleep(Duration::from_secs(30));
+            Err(AudioError::NoDevice)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_microphone_that_never_starts_ends_the_turn_instead_of_listening_forever() {
+        let s = setup_with(
+            Box::new(|| Box::new(Hangs)),
+            Arc::new(AtomicU64::new(0)),
+            Box::new(Says("never")),
+            Duration::from_millis(300),
+        );
+        s.ctl.start_capture().unwrap();
+        assert_eq!(s.orch.snapshot().phase, AssistantPhase::Listening);
+        wait_for("the turn to give up", || {
+            s.orch.snapshot().phase == AssistantPhase::Error
+        });
+        let n = s.orch.snapshot();
+        let e = n.last_error.unwrap();
+        assert_eq!(e.code, ErrorCode::DeviceLost);
+        assert!(e.message.starts_with("The microphone did not start"));
+        assert_eq!(n.mic, MicState::Off);
+        assert!(lock(&s.sink.heard).is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn muting_during_a_capture_stops_it_at_once_and_nothing_is_transcribed() {
+        // Speech with no quiet after it: only a mute or a key release could end this capture.
+        let mut a = tone(300, 0.002);
+        a.extend(tone(900, 0.3));
+        let s = setup(a, false, None, Box::new(Says("never")));
+        s.ctl.start_capture().unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(s.orch.snapshot().mic, MicState::Capturing);
+        // Any route to the orchestrator counts: this is what the button, the hotkey and a typed
+        // "mute" all end in.
+        s.orch.set_mute(true);
+        wait_for("the capture to end", || {
+            s.orch.snapshot().phase == AssistantPhase::Idle
+        });
+        let n = s.orch.snapshot();
+        assert_eq!((n.mic, n.active_request_id), (MicState::Muted, None));
+        assert!(lock(&s.sink.heard).is_empty(), "nothing was transcribed");
+        // Unmuting brings the microphone back to what it was before the capture, not to `Capturing`.
+        assert_eq!(s.orch.set_mute(false).mic, MicState::Off);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_cancel_from_outside_the_controller_stops_the_microphone_too() {
+        // Esc goes through the turn runner, not through the controller: the capture must still end.
+        let mut a = tone(300, 0.002);
+        a.extend(tone(900, 0.3));
+        let s = setup(a, false, None, Box::new(Says("never")));
+        s.ctl.start_capture().unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        let id = s.orch.snapshot().active_request_id.unwrap();
+        s.orch.cancel(&id).unwrap();
+        wait_for("the controller to let go", || lock(&s.ctl.active).is_none());
+        assert!(lock(&s.sink.heard).is_empty());
+        assert_eq!(s.orch.snapshot().phase, AssistantPhase::Idle);
     }
 }
