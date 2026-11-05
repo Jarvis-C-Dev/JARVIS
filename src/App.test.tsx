@@ -409,6 +409,35 @@ describe("App panels (issue #37)", () => {
     }
   });
 
+  it("hides the pop-up while an approval card waits, so the card is never behind it, and brings it back after", async () => {
+    vi.useFakeTimers();
+    usePanelSplit.setState({ split: "popup" });
+    try {
+      const t = new MockTransport();
+      const { container } = render(<App transport={t} />);
+      await act(async () => {});
+      await act(async () =>
+        fireEvent.click(screen.getByRole("button", { name: "Settings" })),
+      );
+      expect(screen.getByRole("dialog", { name: "Settings" })).toBeVisible();
+      expect(container.querySelector(".app-top")).toHaveAttribute("inert");
+      // An approval arrives: the pop-up is hidden (still mounted) and the page can be reached.
+      act(() => {
+        t.runScript("approval");
+        vi.advanceTimersByTime(5000);
+      });
+      expect(container.querySelector(".approvals")).not.toBeNull();
+      expect(container.querySelector(".modal-backdrop")).toHaveAttribute(
+        "hidden",
+      );
+      expect(container.querySelector(".app-top")).not.toHaveAttribute("inert");
+      expect(container.querySelector(".app-main")).not.toHaveAttribute("inert");
+    } finally {
+      usePanelSplit.setState({ split: "rail" });
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps Tab inside the pop-up and moves between the settings sections with the arrow keys", async () => {
     usePanelSplit.setState({ split: "popup" });
     try {

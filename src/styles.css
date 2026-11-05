@@ -1011,3 +1011,7 @@ blockquote.memory-text {
     border-bottom: 1px solid var(--border);
   }
 }
+
+.modal-backdrop[hidden] {
+  display: none;
+}

@@ -163,11 +163,16 @@ export default function App({ transport }: { transport: Transport }) {
     </SidePanel>
   ) : null;
   const popup = split === "popup" && panelNode !== null;
+  // A card that needs an answer (an approval, a proposed memory) must never sit behind a pop-up: while
+  // one is waiting the pop-up is hidden (not closed, so a half-typed field survives) and the page is
+  // reachable; it comes back when the card is answered.
+  const needsAnswer =
+    (snapshot?.pendingApprovals.length ?? 0) > 0 || proposals.length > 0;
 
   return (
     <div className={`app${panel ? " has-panel" : ""}`} data-split={split}>
       {transport.isMock && <MockBadge />}
-      <div className="app-top" inert={popup}>
+      <div className="app-top" inert={popup && !needsAnswer}>
         <header className="app-header">
           <h1>JARVIS</h1>
           <nav aria-label="Panels" className="app-nav">
@@ -216,7 +221,7 @@ export default function App({ transport }: { transport: Transport }) {
           the person chose (Settings, Display): over the talk column (`rail`, the default), over the
           conversation (`stage`), or across the whole width (`both`). Everything scrolls inside its own
           area, so nothing moves the page. */}
-      <div className="app-main" inert={popup}>
+      <div className="app-main" inert={popup && !needsAnswer}>
         {split === "both" && panelNode}
         <main className="workspace">
           {error && <p role="alert">{error}</p>}
@@ -255,6 +260,7 @@ export default function App({ transport }: { transport: Transport }) {
       {popup && (
         <div
           className="modal-backdrop"
+          hidden={needsAnswer}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closePanel();
           }}
