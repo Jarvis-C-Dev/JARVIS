@@ -87,11 +87,11 @@ select {
   background: var(--surface);
 }
 
-/* ---- Layout (issue #144): a fixed frame. The header is on top; below it the work area is
-   JARVIS (a narrow column with the hologram, the status and the talk button down the left, the
-   conversation filling the rest) and, when a panel is open, the panel in the top half with JARVIS in
-   the bottom half. The conversation and the panel scroll inside their own areas, so the talk button
-   and the newest messages are always on screen. ---- */
+/* ---- Layout (issue #144): a fixed frame. The header is on top; below it a narrow column down the
+   left (the hologram, the status and the talk button) and, beside it, the conversation. A panel
+   splits only the conversation side: the panel above, the conversation below, in equal halves, while
+   the talk column keeps its full height. The conversation and the panel scroll inside their own
+   areas, so the talk button and the newest messages are always on screen. ---- */
 .app {
   /* The containing block of the visually hidden labels, so they cannot make the page scroll. */
   position: relative;
@@ -147,16 +147,12 @@ select {
   background: var(--bg);
 }
 
-/* The work area: the panel (when open) above, JARVIS below; equal halves. */
+/* The work area is one row: the talk column, then the stage. */
 .app-main {
   flex: 1;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-}
-
-.app.has-panel .app-main {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 /* JARVIS: the rail down the left, the conversation beside it. */
@@ -202,37 +198,17 @@ select {
   font-size: 1.05rem;
 }
 
-/* With a panel open JARVIS only has half the height, so the rail shrinks: a smaller hologram, and
-   Mute and Cancel side by side under the talk button. */
-.app.has-panel .rail {
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
+/* The stage: the conversation, or, with a panel open, the panel above and the conversation below
+   in equal halves. The talk column beside it keeps its full height. */
+.stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
 }
 
-.app.has-panel .rail .hologram-3d {
-  width: 88px;
-  height: 88px;
-}
-
-.app.has-panel .rail .orb svg {
-  width: 88px;
-  height: 88px;
-}
-
-.app.has-panel .rail .controls {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-
-.app.has-panel .rail .controls .push-to-talk {
-  flex: 1 1 100%;
-  padding: 0.5rem 0.6rem;
-  font-size: inherit;
-}
-
-.app.has-panel .rail .controls button:not(.push-to-talk) {
-  flex: 1 1 0;
-  width: auto;
+.app.has-panel .stage {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .workspace > [role="alert"] {

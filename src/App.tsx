@@ -194,28 +194,16 @@ export default function App({ transport }: { transport: Transport }) {
         )}
       </div>
       <WelcomeNotice transport={transport} />
-      {/* The window is a fixed frame: header on top, then the work area. A panel takes the top half of
-          the work area and JARVIS stays visible in the bottom half; the conversation and the panel
-          scroll inside their own areas, so nothing moves the page. */}
+      {/* The window is a fixed frame: the header on top, then the work area. The talk column (hologram,
+          status, talk button) runs down the left and never changes. Beside it is the stage: the
+          conversation, and when a panel is open the stage splits in half with the panel above the
+          conversation. The conversation and the panel scroll inside their own areas, so nothing moves
+          the page. */}
       <div className="app-main">
-        {panel && (
-          <SidePanel
-            id={`${panel}-panel`}
-            title={PANELS[panel]}
-            onClose={closePanel}
-          >
-            {panel === "settings" && <SettingsPanel transport={transport} />}
-            {panel === "activity" && <ActivityLog transport={transport} />}
-            {panel === "memory" && <MemoryPanel data={memories} />}
-            {panel === "history" && <HistoryPanel transport={transport} />}
-          </SidePanel>
-        )}
         <main className="workspace">
           {error && <p role="alert">{error}</p>}
           {!error && snapshot && (
             <>
-              {/* The hologram, the status and the talk button: a narrow column down one side, so
-                  they stay in view however long the conversation gets. */}
               <aside className="rail" aria-label="JARVIS">
                 <Hologram phase={snapshot.phase} mic={snapshot.mic} />
                 <StatusPanel snapshot={snapshot} onRetry={retryTurn} />
@@ -227,12 +215,32 @@ export default function App({ transport }: { transport: Transport }) {
                   onTalkStop={onTalkStop}
                 />
               </aside>
-              <Chat
-                turns={turns}
-                busy={snapshot.activeRequestId !== null}
-                onSubmit={onSubmitText}
-                onClear={clearChat}
-              />
+              <div className="stage">
+                {panel && (
+                  <SidePanel
+                    id={`${panel}-panel`}
+                    title={PANELS[panel]}
+                    onClose={closePanel}
+                  >
+                    {panel === "settings" && (
+                      <SettingsPanel transport={transport} />
+                    )}
+                    {panel === "activity" && (
+                      <ActivityLog transport={transport} />
+                    )}
+                    {panel === "memory" && <MemoryPanel data={memories} />}
+                    {panel === "history" && (
+                      <HistoryPanel transport={transport} />
+                    )}
+                  </SidePanel>
+                )}
+                <Chat
+                  turns={turns}
+                  busy={snapshot.activeRequestId !== null}
+                  onSubmit={onSubmitText}
+                  onClear={clearChat}
+                />
+              </div>
             </>
           )}
           {commandError && <p role="alert">{commandError}</p>}

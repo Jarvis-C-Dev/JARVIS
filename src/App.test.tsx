@@ -366,22 +366,25 @@ describe("App panels (issue #37)", () => {
     }
   });
 
-  it("keeps the talk controls and the conversation in one work area with the panel above it", async () => {
+  it("keeps the talk column beside the conversation, and a panel splits only the conversation side", async () => {
     const { container } = render(<App transport={new MockTransport()} />);
     await screen.findByTestId("phase");
-    const main = container.querySelector(".app-main") as HTMLElement;
-    const workspace = main.querySelector("main.workspace") as HTMLElement;
-    // The rail (hologram, status, talk button) and the conversation are side by side.
-    expect(workspace.querySelector("aside.rail .push-to-talk")).not.toBeNull();
-    expect(workspace.querySelector("section.chat")).not.toBeNull();
+    const workspace = container.querySelector("main.workspace") as HTMLElement;
+    const rail = workspace.querySelector("aside.rail") as HTMLElement;
+    const stage = workspace.querySelector(".stage") as HTMLElement;
+    // The talk column and the stage (the conversation) are side by side.
+    expect(rail.querySelector(".push-to-talk")).not.toBeNull();
+    expect(stage.querySelector("section.chat")).not.toBeNull();
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Settings" })),
     );
-    // The panel comes before the workspace (above it), and the workspace is still there.
-    expect(main.firstElementChild).toBe(
-      screen.getByRole("region", { name: "Settings" }),
-    );
-    expect(main.querySelector("main.workspace .push-to-talk")).not.toBeNull();
+    // The panel is in the stage, above the conversation; the talk column is not touched.
+    const panel = screen.getByRole("region", { name: "Settings" });
+    expect(stage.firstElementChild).toBe(panel);
+    expect(stage.querySelector("section.chat")).not.toBeNull();
+    expect(workspace.querySelector("aside.rail")).toBe(rail);
+    expect(rail.querySelector(".push-to-talk")).not.toBeNull();
+    expect(rail.contains(panel)).toBe(false);
   });
 
   it("Esc inside a panel closes it and does not cancel the reply; outside it still cancels", async () => {
