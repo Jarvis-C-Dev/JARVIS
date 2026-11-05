@@ -124,6 +124,43 @@ impl TurnSink for AppSink {
     }
 }
 
+/// Where a voice-started turn reports: the reply streams on the channel the window attached with
+/// `voice_attach`, everything else is published as for a typed turn, and what was heard goes out
+/// as `transcript.final`.
+pub struct AppVoiceSink {
+    pub app: tauri::AppHandle,
+    pub stream: Arc<crate::ipc::voice_stream::VoiceStream>,
+}
+
+impl TurnSink for AppVoiceSink {
+    fn event(&self, e: TurnStreamEvent) {
+        if !self.stream.send(e) {
+            tracing::debug!("no window is attached for the voice reply");
+        }
+    }
+    fn snapshot(&self, s: Snapshot) {
+        publish(&self.app, s);
+    }
+    fn usage(&self, u: UsageSummary) {
+        publish_usage(&self.app, u);
+    }
+    fn interrupted(&self, i: TurnInterrupted) {
+        publish_event(&self.app, EventKind::TurnInterrupted, i);
+    }
+    fn approval(&self, r: ApprovalRequest) {
+        publish_event(&self.app, EventKind::ApprovalRequested, r);
+    }
+    fn activity(&self, e: ActivityEntry) {
+        publish_event(&self.app, EventKind::ActivityAppended, e);
+    }
+}
+
+impl crate::voice::controller::VoiceSink for AppVoiceSink {
+    fn transcript_final(&self, t: crate::ipc::types::Transcript) {
+        publish_event(&self.app, EventKind::TranscriptFinal, t);
+    }
+}
+
 /// Answers an approval card. Only the window can call this: voice has no route to it, and
 /// the gateway independently refuses voice for high risk.
 #[tauri::command]
@@ -299,16 +336,29 @@ pub fn voice_attach(
     stream.attach_channel(on_event);
 }
 
-/// Push to talk, key down: starts listening. Until voice input is built this answers with an error.
+/// Push to talk, key down: starts listening. Refused until the window has attached its channel
+/// (`voice_attach`), so a reply never streams to nowhere. A start while already listening does
+/// nothing and says `Ok`. `async` so it runs inside the Tokio runtime: the reply is streamed there.
 #[tauri::command]
-pub fn voice_capture_start(svc: tauri::State<'_, Arc<Services>>) -> Result<(), JarvisError> {
-    svc.voice_capture_start()
+pub async fn voice_capture_start(
+    stream: tauri::State<'_, Arc<crate::ipc::voice_stream::VoiceStream>>,
+    voice: tauri::State<'_, Arc<crate::voice::controller::VoiceController>>,
+) -> Result<(), JarvisError> {
+    if !stream.is_attached() {
+        return Err(JarvisError {
+            code: ErrorCode::Internal,
+            message: "Voice input is not ready yet.".into(),
+            retryable: true,
+            request_id: None,
+        });
+    }
+    voice.inner().start_capture()
 }
 
-/// Push to talk, key up, or cancel. Safe to call when nothing is capturing.
+/// Push to talk, key up: use what was said. Safe to call when nothing is capturing.
 #[tauri::command]
-pub fn voice_capture_stop(svc: tauri::State<'_, Arc<Services>>) {
-    svc.voice_capture_stop()
+pub fn voice_capture_stop(voice: tauri::State<'_, Arc<crate::voice::controller::VoiceController>>) {
+    voice.stop_capture()
 }
 
 /// Downloads the voice models (progress arrives as `voice.models_progress`). Not built yet.
