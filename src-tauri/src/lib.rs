@@ -142,8 +142,15 @@ pub fn run() {
                     tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
                 }
             });
-            // Voice (M3 step 4c): push to talk. The speech model is not installed yet, so a capture
-            // that hears speech ends with "The speech models are not installed yet." (D-26 adds it).
+            // Voice (M3 step 4c): push to talk. The speech model (Moonshine, D-26) is read from the
+            // app data folder when something is first said; until its files are there a capture that
+            // hears speech ends with "The speech models are not installed yet.".
+            let stt_dir = app
+                .path()
+                .app_data_dir()?
+                .join("models")
+                .join("stt")
+                .join("moonshine-base-en-int8");
             let voice_stream = Arc::new(ipc::voice_stream::VoiceStream::default());
             let for_device = svc.clone();
             let voice = voice::controller::VoiceController::new(
@@ -155,7 +162,7 @@ pub fn run() {
                 }),
                 Box::new(|| Box::new(audio::cpal_backend::CpalBackend)),
                 Box::new(move || for_device.settings.get().voice.input_device),
-                Box::new(voice::transcribe::MissingModels),
+                Box::new(voice::sherpa::SherpaTranscriber::new(stt_dir)),
                 voice::controller::VoiceConfig::default(),
             );
             app.manage(store);
