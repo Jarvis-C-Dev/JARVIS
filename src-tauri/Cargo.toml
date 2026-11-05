@@ -71,6 +71,9 @@ plist = "1.10.3"
 libc = "0.2.191"
 
 [target.'cfg(windows)'.dependencies]
+# Opens the wake word's ONNX Runtime library with a restricted search path, platform/dll.rs (ISC; already
+# in the build as a dependency of ort, so no new package).
+libloading = "0.9"
 # MoveFileExW without REPLACE_EXISTING for no-overwrite moves (platform/fs.rs) and the system
 # volume keys (platform/media.rs).
 windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_UI_Input_KeyboardAndMouse"] }

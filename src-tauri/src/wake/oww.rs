@@ -162,6 +162,11 @@ fn runtime(lib: &Pinned) -> Result<&'static Environment, WakeError> {
             ))
         };
     }
+    // On Windows the library is opened first with a search that is limited to its own folder and
+    // System32 (`ort` opens it with no flags, which would also search the current folder and
+    // `PATH`); `ort`'s own open of the same file then reuses it. Nothing to do elsewhere.
+    crate::platform::dll::preload_restricted(&lib.path)
+        .map_err(|e| WakeError::Runtime(format!("cannot open {}: {e}", name_of(&lib.path))))?;
     let env = ort::init_from(&lib.path)
         .map_err(|e| WakeError::Runtime(format!("cannot load {}: {e}", name_of(&lib.path))))?
         .build()
