@@ -1,21 +1,24 @@
 import { create } from "zustand";
 
 /**
- * Where an open panel (Settings, Activity, Memory, History) appears. Three layouts are offered so
+ * Where an open panel (Settings, Activity, Memory, History) appears. Four layouts are offered so
  * they can be compared (issue #144):
  *
+ * - `popup`: a **pop-up window** over the app, with a dimmed background, like the settings of a
+ *   desktop app: sections down the left, the content beside them, closed with Esc, the Close button
+ *   or a click outside. Nothing on the page moves. This is the default.
  * - `rail`: the panel splits the **talk column** (hologram side): the panel above, the hologram, status and
- *   talk button below it. The conversation is not touched. This is the default.
+ *   talk button below it. The conversation is not touched.
  * - `stage`: the panel splits the **conversation** side: the panel above the conversation. The talk
  *   column is not touched.
  * - `both`: the panel runs across the **whole width**, above the talk column and the conversation.
  *
  * A look-and-feel choice only: stored on this computer, never sent to the backend.
  */
-export type PanelSplit = "rail" | "stage" | "both";
+export type PanelSplit = "popup" | "rail" | "stage" | "both";
 
 const KEY = "jarvis.panelSplit";
-const VALUES: readonly PanelSplit[] = ["rail", "stage", "both"];
+const VALUES: readonly PanelSplit[] = ["popup", "rail", "stage", "both"];
 
 function read(): PanelSplit {
   try {
@@ -24,7 +27,7 @@ function read(): PanelSplit {
   } catch {
     // Storage can be unavailable; the default applies.
   }
-  return "rail";
+  return "popup";
 }
 
 export const usePanelSplit = create<{

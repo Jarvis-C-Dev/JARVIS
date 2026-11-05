@@ -22,6 +22,11 @@ const CHOICES: { value: HologramPref; label: string; hint: string }[] = [
 
 const SPLITS: { value: PanelSplit; label: string; hint: string }[] = [
   {
+    value: "popup",
+    label: "A pop-up window",
+    hint: "Opens over the app with the page dimmed behind it; Esc or a click outside closes it.",
+  },
+  {
     value: "rail",
     label: "Over the hologram side",
     hint: "The panel opens above the hologram and talk button; the conversation stays whole.",

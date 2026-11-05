@@ -26,6 +26,9 @@ describe("DisplaySettings", () => {
     usePanelSplit.setState({ split: "rail" });
     render(<DisplaySettings />);
     expect(screen.getByLabelText("Over the hologram side")).toBeChecked();
+    fireEvent.click(screen.getByLabelText("A pop-up window"));
+    expect(usePanelSplit.getState().split).toBe("popup");
+    expect(localStorage.getItem("jarvis.panelSplit")).toBe("popup");
     fireEvent.click(screen.getByLabelText("Over the conversation"));
     expect(usePanelSplit.getState().split).toBe("stage");
     expect(localStorage.getItem("jarvis.panelSplit")).toBe("stage");

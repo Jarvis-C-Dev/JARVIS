@@ -150,18 +150,24 @@ export default function App({ transport }: { transport: Transport }) {
 
   const split = usePanelSplit((s) => s.split);
   const panelNode = panel ? (
-    <SidePanel id={`${panel}-panel`} title={PANELS[panel]} onClose={closePanel}>
+    <SidePanel
+      id={`${panel}-panel`}
+      title={PANELS[panel]}
+      onClose={closePanel}
+      modal={split === "popup"}
+    >
       {panel === "settings" && <SettingsPanel transport={transport} />}
       {panel === "activity" && <ActivityLog transport={transport} />}
       {panel === "memory" && <MemoryPanel data={memories} />}
       {panel === "history" && <HistoryPanel transport={transport} />}
     </SidePanel>
   ) : null;
+  const popup = split === "popup" && panelNode !== null;
 
   return (
     <div className={`app${panel ? " has-panel" : ""}`} data-split={split}>
       {transport.isMock && <MockBadge />}
-      <div className="app-top">
+      <div className="app-top" inert={popup}>
         <header className="app-header">
           <h1>JARVIS</h1>
           <nav aria-label="Panels" className="app-nav">
@@ -210,7 +216,7 @@ export default function App({ transport }: { transport: Transport }) {
           the person chose (Settings, Display): over the talk column (`rail`, the default), over the
           conversation (`stage`), or across the whole width (`both`). Everything scrolls inside its own
           area, so nothing moves the page. */}
-      <div className="app-main">
+      <div className="app-main" inert={popup}>
         {split === "both" && panelNode}
         <main className="workspace">
           {error && <p role="alert">{error}</p>}
@@ -244,6 +250,18 @@ export default function App({ transport }: { transport: Transport }) {
           {commandError && <p role="alert">{commandError}</p>}
         </main>
       </div>
+      {/* The pop-up window: the page behind is dimmed and cannot be reached (`inert`); Esc, Close or a
+          click outside closes it. */}
+      {popup && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closePanel();
+          }}
+        >
+          {panelNode}
+        </div>
+      )}
       {isMock(transport) && (
         <footer className="mock-footer">
           <MockControls transport={transport} />

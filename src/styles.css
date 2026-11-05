@@ -937,3 +937,77 @@ blockquote.memory-text {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* ---- The pop-up window (issue #144): the panel over a dimmed page, like a desktop app's settings. ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.modal-backdrop .side-panel {
+  width: min(62rem, 100%);
+  height: min(42rem, 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+
+/* Settings in a pop-up: the sections down the left, the content beside them. */
+.modal-backdrop .settings-tabs {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 0 1.25rem;
+  align-items: start;
+}
+
+.modal-backdrop .settings-tabs .tabs {
+  position: sticky;
+  top: 0;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  margin: 0.5rem 0 0;
+  padding-right: 0.5rem;
+  border-bottom: none;
+  border-right: 1px solid var(--border);
+}
+
+.modal-backdrop .settings-tabs .tabs [role="tab"] {
+  text-align: left;
+  border-bottom: none;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.modal-backdrop .settings-tabs .tabs [role="tab"][aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+@media (max-width: 760px) {
+  .modal-backdrop {
+    padding: 0;
+  }
+
+  .modal-backdrop .side-panel {
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .modal-backdrop .settings-tabs {
+    display: block;
+  }
+
+  .modal-backdrop .settings-tabs .tabs {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-right: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}

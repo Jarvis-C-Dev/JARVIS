@@ -367,6 +367,81 @@ describe("App panels (issue #37)", () => {
     }
   });
 
+  it("opens a panel as a pop-up window by default: a modal dialog over a page that cannot be reached, closed by Esc, Close or a click outside", async () => {
+    usePanelSplit.setState({ split: "popup" });
+    try {
+      const { container } = render(<App transport={new MockTransport()} />);
+      await screen.findByTestId("phase");
+      const settingsBtn = screen.getByRole("button", { name: "Settings" });
+      const rail = container.querySelector("aside.rail");
+      const chat = container.querySelector("section.chat");
+      await act(async () => fireEvent.click(settingsBtn));
+      const dialog = screen.getByRole("dialog", { name: "Settings" });
+      expect(dialog).toHaveAttribute("aria-modal", "true");
+      expect(dialog.closest(".modal-backdrop")).not.toBeNull();
+      // The page behind is dimmed and cannot be reached, and nothing in it moved or was rebuilt.
+      expect(container.querySelector(".app-top")).toHaveAttribute("inert");
+      expect(container.querySelector(".app-main")).toHaveAttribute("inert");
+      expect(container.querySelector("aside.rail")).toBe(rail);
+      expect(container.querySelector("section.chat")).toBe(chat);
+      // A click inside does nothing; a click on the dimmed area closes it and gives the focus back.
+      fireEvent.mouseDown(dialog);
+      expect(
+        screen.getByRole("dialog", { name: "Settings" }),
+      ).toBeInTheDocument();
+      await act(async () =>
+        fireEvent.mouseDown(container.querySelector(".modal-backdrop")!),
+      );
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(settingsBtn).toHaveFocus();
+      expect(container.querySelector(".app-main")).not.toHaveAttribute("inert");
+      // Esc inside it closes it too, and does not cancel anything.
+      await act(async () => fireEvent.click(settingsBtn));
+      await act(async () =>
+        fireEvent.keyDown(screen.getByRole("dialog", { name: "Settings" }), {
+          key: "Escape",
+        }),
+      );
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(settingsBtn).toHaveFocus();
+    } finally {
+      usePanelSplit.setState({ split: "rail" });
+    }
+  });
+
+  it("keeps Tab inside the pop-up and moves between the settings sections with the arrow keys", async () => {
+    usePanelSplit.setState({ split: "popup" });
+    try {
+      render(<App transport={new MockTransport()} />);
+      await screen.findByTestId("phase");
+      await act(async () =>
+        fireEvent.click(screen.getByRole("button", { name: "Settings" })),
+      );
+      const dialog = await screen.findByRole("dialog", { name: "Settings" });
+      const close = within(dialog).getByRole("button", { name: /Close/ });
+      // Shift+Tab from the first control goes to the last one inside, not to the page.
+      close.focus();
+      await act(async () =>
+        fireEvent.keyDown(close, { key: "Tab", shiftKey: true }),
+      );
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      expect(document.activeElement).not.toBe(close);
+      // Tab from the last control goes back to the first.
+      const last = document.activeElement as HTMLElement;
+      await act(async () => fireEvent.keyDown(last, { key: "Tab" }));
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      // The sections are a vertical list: Down and Up move between them.
+      const tabs = within(dialog).getAllByRole("tab");
+      tabs[0].focus();
+      await act(async () => fireEvent.keyDown(tabs[0], { key: "ArrowDown" }));
+      expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+      await act(async () => fireEvent.keyDown(tabs[1], { key: "ArrowUp" }));
+      expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    } finally {
+      usePanelSplit.setState({ split: "rail" });
+    }
+  });
+
   it.each([
     ["rail", ".rail-col", "aside.rail"],
     ["stage", ".stage", "section.chat"],
