@@ -19,7 +19,7 @@ import { useVoice } from "./hooks/useVoice";
 import { PROTOCOL_VERSION } from "./protocol";
 import { useChatStore } from "./state/chatStore";
 import { describeError } from "./state/errors";
-import { usePanelSplit } from "./state/layoutPref";
+import { useGlassPref, usePanelSplit } from "./state/layoutPref";
 import { useSnapshotStore } from "./state/snapshotStore";
 import type { Transport } from "./transport";
 import type { MockTransport } from "./transport/mock/MockTransport";
@@ -149,6 +149,7 @@ export default function App({ transport }: { transport: Transport }) {
   }, [transport, receive]);
 
   const split = usePanelSplit((s) => s.split);
+  const glass = useGlassPref((s) => s.glass);
   const panelNode = panel ? (
     <SidePanel
       id={`${panel}-panel`}
@@ -170,7 +171,11 @@ export default function App({ transport }: { transport: Transport }) {
     (snapshot?.pendingApprovals.length ?? 0) > 0 || proposals.length > 0;
 
   return (
-    <div className={`app${panel ? " has-panel" : ""}`} data-split={split}>
+    <div
+      className={`app${panel ? " has-panel" : ""}`}
+      data-split={split}
+      data-glass={glass}
+    >
       {transport.isMock && <MockBadge />}
       <div className="app-top" inert={popup && !needsAnswer}>
         <header className="app-header">
