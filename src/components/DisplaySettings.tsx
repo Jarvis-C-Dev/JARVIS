@@ -29,7 +29,7 @@ const GLASS_CHOICES: { value: GlassPref; label: string; hint: string }[] = [
   {
     value: "auto",
     label: "Automatic",
-    hint: "Frosted glass unless your system asks for reduced transparency, more contrast or reduced motion.",
+    hint: "Frosted glass unless your system asks for reduced transparency or more contrast.",
   },
   {
     value: "on",

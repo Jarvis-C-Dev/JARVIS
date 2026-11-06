@@ -22,6 +22,7 @@
     rgb(226 232 240 / 0.22) 100%
   );
   --glass-border: rgb(255 255 255 / 0.85);
+  --glass-panel-border-bottom: 1px solid var(--glass-border);
   --glass-highlight:
     inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 0 0 1px rgb(15 23 42 / 0.08);
   --glass-shadow: 0 12px 32px rgb(15 23 42 / 0.1);
@@ -52,13 +53,13 @@
     --accent-text: #0b1220;
     --user-bubble: #1e3a5f;
     --danger: #f87171;
-    --glass-bg: rgb(23 29 36 / 0.92);
-    --glass-bg-elevated: rgb(26 33 42 / 0.95);
+    --glass-bg: rgb(18 24 31 / 0.93);
+    --glass-bg-elevated: rgb(23 29 36 / 0.95);
     --glass-sheen: linear-gradient(
       160deg,
-      rgb(255 255 255 / 0.1) 0%,
+      rgb(255 255 255 / 0.08) 0%,
       rgb(255 255 255 / 0.02) 42%,
-      rgb(76 141 255 / 0.05) 100%
+      rgb(76 141 255 / 0.04) 100%
     );
     --glass-border: rgb(255 255 255 / 0.2);
     --glass-highlight:
@@ -84,14 +85,14 @@
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   :root {
-    --glass-bg: rgb(255 255 255 / 0.74);
-    --glass-bg-elevated: rgb(255 255 255 / 0.78);
+    --glass-bg: rgb(255 255 255 / 0.85);
+    --glass-bg-elevated: rgb(255 255 255 / 0.86);
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --glass-bg: rgb(23 29 36 / 0.74);
-      --glass-bg-elevated: rgb(26 34 44 / 0.78);
+      --glass-bg: rgb(18 24 31 / 0.87);
+      --glass-bg-elevated: rgb(20 27 35 / 0.88);
     }
   }
 }
@@ -347,7 +348,7 @@ select {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: var(--glass-panel-border-bottom);
   background-color: var(--glass-bg);
   background-image: var(--glass-sheen);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
@@ -1032,7 +1033,6 @@ blockquote.memory-text {
 }
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .side-panel,
   .modal-backdrop .side-panel {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     backdrop-filter: blur(var(--glass-blur)) saturate(180%);
@@ -1049,12 +1049,13 @@ blockquote.memory-text {
 }
 
 /* Glass effect turned off in Settings → Display, or Automatic with system accessibility settings:
-   fall back to solid surfaces and disable GPU blur (#156). */
+   fall back to solid surfaces matching pre-#156 main and disable GPU blur (#156). */
 .app[data-glass="off"] {
   --glass-bg: var(--surface);
   --glass-bg-elevated: var(--surface);
   --glass-sheen: none;
   --glass-border: var(--border);
+  --glass-panel-border-bottom: 2px solid var(--border);
   --glass-highlight: 0 0 0 transparent;
   --glass-shadow: 0 0 0 transparent;
   --glass-popup-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
@@ -1070,13 +1071,13 @@ blockquote.memory-text {
 
 @media (prefers-reduced-transparency: reduce),
   (prefers-contrast: more),
-  (prefers-reduced-motion: reduce),
   (forced-colors: active) {
   .app[data-glass="auto"] {
     --glass-bg: var(--surface);
     --glass-bg-elevated: var(--surface);
     --glass-sheen: none;
     --glass-border: var(--border);
+    --glass-panel-border-bottom: 2px solid var(--border);
     --glass-highlight: 0 0 0 transparent;
     --glass-shadow: 0 0 0 transparent;
     --glass-popup-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
@@ -1097,6 +1098,7 @@ blockquote.memory-text {
     --glass-bg-elevated: var(--surface);
     --glass-sheen: none;
     --glass-border: var(--border);
+    --glass-panel-border-bottom: 2px solid var(--border);
     --glass-highlight: 0 0 0 transparent;
     --glass-shadow: 0 0 0 transparent;
     --glass-ambient: none;

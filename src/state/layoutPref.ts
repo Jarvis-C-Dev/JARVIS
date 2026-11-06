@@ -49,7 +49,7 @@ export const usePanelSplit = create<{
  * Whether surfaces use the translucent "Liquid Glass" look (issue #156):
  *
  * - `auto`: glass on by default, falling back to solid surfaces when the system asks for reduced
- *   transparency, more contrast, reduced motion or forced colours.
+ *   transparency, more contrast or forced colours.
  * - `on`: glass on (still honours `forced-colors` so high-contrast themes stay legible).
  * - `off`: solid surfaces everywhere.
  *

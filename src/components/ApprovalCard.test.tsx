@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalRequest } from "../types/generated/ApprovalRequest";
@@ -109,5 +111,47 @@ describe("ApprovalCard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Action not allowed: The approval expired",
     );
+  });
+
+  it("never uses --glass-* variables or blur on .approval-card or .memory-card in styles.css (#156)", () => {
+    const css = readFileSync(resolve(__dirname, "../styles.css"), "utf8");
+    // Strip comments so we inspect actual selector/declaration blocks.
+    const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
+    const cardBlocks: { selector: string; body: string }[] = [];
+    for (const match of clean.matchAll(ruleRegex)) {
+      const selector = match[1].trim();
+      const body = match[2].trim();
+      if (
+        selector.includes(".approval-card") ||
+        selector.includes(".memory-card")
+      ) {
+        cardBlocks.push({ selector, body });
+      }
+    }
+    expect(cardBlocks.length).toBeGreaterThan(0);
+    for (const block of cardBlocks) {
+      expect(block.body).not.toMatch(/--glass-/);
+      const filters = [
+        ...block.body.matchAll(/(?:-webkit-)?backdrop-filter\s*:\s*([^;]+)/g),
+      ];
+      for (const f of filters) {
+        expect(f[1].trim()).toBe("none");
+      }
+    }
+    expect(
+      cardBlocks.some(
+        (b) =>
+          b.selector.includes(".approval-card") &&
+          b.body.includes("background: var(--surface)"),
+      ),
+    ).toBe(true);
+    expect(
+      cardBlocks.some(
+        (b) =>
+          b.selector.includes(".memory-card") &&
+          b.body.includes("background: var(--surface)"),
+      ),
+    ).toBe(true);
   });
 });
