@@ -449,3 +449,16 @@ describe("MockTransport action limit (contract: Settings.maxToolCalls)", () => {
     expect(s.autoAllowMedium).toBe(false);
   });
 });
+
+describe("MockTransport voice_capture_tap (contract, issue #143)", () => {
+  it("is accepted at any time and changes nothing yet", async () => {
+    const t = new MockTransport();
+    // Nothing capturing: safe.
+    await expect(t.voiceCaptureTap()).resolves.toBeUndefined();
+    await t.voiceAttach(() => {});
+    await t.voiceCaptureStart();
+    const before = await t.getSnapshot();
+    await expect(t.voiceCaptureTap()).resolves.toBeUndefined();
+    expect((await t.getSnapshot()).phase).toBe(before.phase);
+  });
+});
