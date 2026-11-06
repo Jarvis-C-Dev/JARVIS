@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+// @ts-expect-error type error without @types/node package
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalRequest } from "../types/generated/ApprovalRequest";
 import { ApprovalCard } from "./ApprovalCard";
@@ -114,7 +114,7 @@ describe("ApprovalCard", () => {
   });
 
   it("never uses --glass-* variables or blur on .approval-card or .memory-card in styles.css (#156)", () => {
-    const css = readFileSync(resolve(__dirname, "../styles.css"), "utf8");
+    const css: string = readFileSync("src/styles.css", "utf8");
     // Strip comments so we inspect actual selector/declaration blocks.
     const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
     const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
