@@ -33,6 +33,19 @@
   --glass-ambient:
     radial-gradient(circle at 18% 24%, rgb(37 99 235 / 0.14), transparent 48%),
     radial-gradient(circle at 82% 76%, rgb(14 165 233 / 0.12), transparent 52%);
+  /* Controls (issue #156, PR 2): buttons and the selected tab. Fills stay at least as opaque as the
+     panel glass, so --text and --muted keep their contrast. */
+  --glass-button-bg: rgb(255 255 255 / 0.92);
+  --glass-button-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.7) 0%,
+    rgb(226 232 240 / 0.25) 100%
+  );
+  --glass-button-border: rgb(15 23 42 / 0.18);
+  --glass-button-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95), 0 1px 3px rgb(15 23 42 / 0.12);
+  --glass-tab-active-bg: rgb(37 99 235 / 0.1);
+  --glass-tab-active-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
   font:
     15px/1.5 system-ui,
     -apple-system,
@@ -80,6 +93,17 @@
         rgb(56 189 248 / 0.13),
         transparent 52%
       );
+    --glass-button-bg: rgb(30 38 48 / 0.92);
+    --glass-button-sheen: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.1) 0%,
+      rgb(255 255 255 / 0.02) 100%
+    );
+    --glass-button-border: rgb(255 255 255 / 0.22);
+    --glass-button-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 3px rgb(0 0 0 / 0.4);
+    --glass-tab-active-bg: rgb(76 141 255 / 0.18);
+    --glass-tab-active-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
   }
 }
 
@@ -129,7 +153,10 @@ button {
   padding: 0.35rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 0.45rem;
-  background: var(--surface);
+  background-color: var(--glass-button-bg);
+  background-image: var(--glass-button-sheen);
+  border-color: var(--glass-button-border);
+  box-shadow: var(--glass-button-shadow);
   cursor: pointer;
 }
 
@@ -260,7 +287,9 @@ select {
   min-height: 0;
   overflow-y: auto;
   padding: 1rem;
-  background: var(--surface);
+  background-color: var(--glass-bg);
+  background-image: var(--glass-sheen);
+  box-shadow: var(--glass-highlight);
 }
 
 .rail > .orb,
@@ -446,10 +475,13 @@ select {
   color: var(--muted);
   /* A tab's name stays on one line ("Key and model" used to break into three). */
   white-space: nowrap;
+  box-shadow: none;
 }
 
 .tabs [role="tab"][aria-selected="true"] {
   border-bottom-color: var(--accent);
+  background-color: var(--glass-tab-active-bg);
+  box-shadow: var(--glass-tab-active-shadow);
   color: var(--text);
   font-weight: 600;
 }
@@ -503,6 +535,9 @@ select {
 }
 
 .push-to-talk[aria-pressed="true"] {
+  background-color: var(--accent);
+  background-image: none;
+  color: var(--accent-text);
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
@@ -1048,6 +1083,14 @@ blockquote.memory-text {
   backdrop-filter: none;
 }
 
+/* Buttons inside those cards are solid too (#156 PR 2). */
+.approval-card button,
+.memory-card button {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
 /* Glass effect turned off in Settings → Display, or Automatic with system accessibility settings:
    fall back to solid surfaces matching pre-#156 main and disable GPU blur (#156). */
 .app[data-glass="off"] {
@@ -1061,6 +1104,12 @@ blockquote.memory-text {
   --glass-popup-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
   --glass-backdrop: rgb(0 0 0 / 0.45);
   --glass-ambient: none;
+  --glass-button-bg: var(--surface);
+  --glass-button-sheen: none;
+  --glass-button-border: var(--border);
+  --glass-button-shadow: none;
+  --glass-tab-active-bg: transparent;
+  --glass-tab-active-shadow: none;
 }
 
 .app[data-glass="off"] .side-panel,
@@ -1083,6 +1132,12 @@ blockquote.memory-text {
     --glass-popup-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
     --glass-backdrop: rgb(0 0 0 / 0.45);
     --glass-ambient: none;
+    --glass-button-bg: var(--surface);
+    --glass-button-sheen: none;
+    --glass-button-border: var(--border);
+    --glass-button-shadow: none;
+    --glass-tab-active-bg: transparent;
+    --glass-tab-active-shadow: none;
   }
 
   .app[data-glass="auto"] .side-panel,
@@ -1102,6 +1157,12 @@ blockquote.memory-text {
     --glass-highlight: 0 0 0 transparent;
     --glass-shadow: 0 0 0 transparent;
     --glass-ambient: none;
+    --glass-button-bg: var(--surface);
+    --glass-button-sheen: none;
+    --glass-button-border: var(--border);
+    --glass-button-shadow: none;
+    --glass-tab-active-bg: transparent;
+    --glass-tab-active-shadow: none;
   }
 
   .app[data-glass="on"] .side-panel,
@@ -1139,6 +1200,7 @@ blockquote.memory-text {
 
 .modal-backdrop .settings-tabs .tabs [role="tab"][aria-selected="true"] {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: var(--glass-tab-active-shadow);
 }
 
 @media (max-width: 760px) {
