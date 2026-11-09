@@ -448,9 +448,15 @@ select {
 }
 
 .rail .push-to-talk {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   padding: 0.85rem 1rem;
   font-size: 1.05rem;
   font-weight: 600;
+  /* Fits two lines ("Speak now… release to send") so Mute and Cancel do not jump on press (#156). */
+  min-height: calc(4.85rem + 2px);
 }
 
 /* The stage: the conversation, or, with a panel open, the panel above and the conversation below
@@ -497,6 +503,7 @@ select {
   flex: 1 1 100%;
   padding: 0.5rem 0.6rem;
   font-size: inherit;
+  min-height: auto;
 }
 
 .app.has-panel[data-split="rail"] .rail .controls button:not(.push-to-talk),
@@ -582,6 +589,7 @@ select {
   .rail .push-to-talk {
     padding: 0.4rem 0.6rem;
     font-size: inherit;
+    min-height: auto;
   }
 
   .rail .hologram-3d {
@@ -689,6 +697,10 @@ select {
 
 /* Hold to talk: no text selection or touch scrolling while the button is held. */
 .push-to-talk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   touch-action: none;
   user-select: none;
 }
