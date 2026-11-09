@@ -868,6 +868,17 @@ kbd {
     transition: none !important;
   }
 
+  .app[data-glass="on"] button,
+  .app[data-glass="on"] .tabs [role="tab"][aria-selected="true"] {
+    -webkit-backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6);
+    backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6);
+  }
+
+  .app[data-glass="on"] .modal-backdrop .side-panel {
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  }
+
   .orb *,
   .chat-reply,
   .chat-reply-streaming > :last-child::after {
@@ -1130,6 +1141,34 @@ blockquote.memory-text {
   }
 }
 
+/* Real refraction enhancement (#156): SVG displacement lens filter when Glass is On
+   on engines supporting url() in backdrop-filter (e.g. WebView2 on Windows).
+   Gated behind @supports and data-glass="on". WebKit and accessibility fallbacks remain on
+   the clean clear style without the filter. */
+@supports (backdrop-filter: url(#glass-refraction)) or
+  (-webkit-backdrop-filter: url(#glass-refraction)) {
+  .app[data-glass="on"] button {
+    -webkit-backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6)
+      url(#glass-refraction);
+    backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6)
+      url(#glass-refraction);
+  }
+
+  .app[data-glass="on"] .tabs [role="tab"][aria-selected="true"] {
+    -webkit-backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6)
+      url(#glass-refraction);
+    backdrop-filter: blur(var(--glass-button-blur, 0px)) saturate(1.6)
+      url(#glass-refraction);
+  }
+
+  .app[data-glass="on"] .modal-backdrop .side-panel {
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%)
+      url(#glass-refraction);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%)
+      url(#glass-refraction);
+  }
+}
+
 /* Hard requirement (#156): approval and memory proposal cards are never glassy.
    They stay 100% opaque, high contrast, and the most legible thing on screen. */
 .approval-card,
@@ -1141,7 +1180,9 @@ blockquote.memory-text {
 
 /* Buttons inside those cards are solid too (#156 PR 2). */
 .approval-card button,
-.memory-card button {
+.memory-card button,
+.app .approval-card button,
+.app .memory-card button {
   background: var(--surface);
   border-color: var(--border);
   border-radius: 0.45rem;
@@ -1179,6 +1220,8 @@ blockquote.memory-text {
   --glass-tab-vertical-bg: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
+.app[data-glass="off"] button,
+.app[data-glass="off"] .tabs [role="tab"],
 .app[data-glass="off"] .side-panel,
 .app[data-glass="off"] .modal-backdrop .side-panel {
   -webkit-backdrop-filter: none;
@@ -1215,6 +1258,8 @@ blockquote.memory-text {
     --glass-tab-vertical-bg: color-mix(in srgb, var(--accent) 15%, transparent);
   }
 
+  .app[data-glass="auto"] button,
+  .app[data-glass="auto"] .tabs [role="tab"],
   .app[data-glass="auto"] .side-panel,
   .app[data-glass="auto"] .modal-backdrop .side-panel {
     -webkit-backdrop-filter: none;
@@ -1248,6 +1293,8 @@ blockquote.memory-text {
     --glass-tab-vertical-bg: color-mix(in srgb, var(--accent) 15%, transparent);
   }
 
+  .app[data-glass="on"] button,
+  .app[data-glass="on"] .tabs [role="tab"],
   .app[data-glass="on"] .side-panel,
   .app[data-glass="on"] .modal-backdrop .side-panel {
     -webkit-backdrop-filter: none;
