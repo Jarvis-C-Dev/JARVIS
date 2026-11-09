@@ -1169,6 +1169,53 @@ blockquote.memory-text {
   }
 }
 
+/* Ambient backdrop enhancement (#156): soft colour blobs (accent and neighbours)
+   behind the window content when Glass is On, giving the clear glass surfaces and
+   refraction colour and contrast to sit on. Text contrast remains WCAG 2.1 AA. */
+.app[data-glass="on"] {
+  background-image:
+    radial-gradient(circle at 14% 18%, rgb(99 102 241 / 0.18), transparent 44%),
+    radial-gradient(circle at 18% 82%, rgb(14 165 233 / 0.2), transparent 48%),
+    radial-gradient(circle at 86% 16%, rgb(37 99 235 / 0.16), transparent 46%),
+    radial-gradient(circle at 78% 84%, rgb(6 182 212 / 0.15), transparent 50%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app[data-glass="on"] {
+    background-image:
+      radial-gradient(
+        circle at 14% 18%,
+        rgb(129 140 248 / 0.22),
+        transparent 44%
+      ),
+      radial-gradient(
+        circle at 18% 82%,
+        rgb(56 189 248 / 0.2),
+        transparent 48%
+      ),
+      radial-gradient(
+        circle at 86% 16%,
+        rgb(76 141 255 / 0.22),
+        transparent 46%
+      ),
+      radial-gradient(
+        circle at 78% 84%,
+        rgb(14 165 233 / 0.16),
+        transparent 50%
+      );
+  }
+}
+
+.app[data-glass="on"] .app-top {
+  background: transparent;
+}
+
+.app[data-glass="on"] .app-header {
+  background-color: var(--glass-rail-bg);
+  background-image: var(--glass-sheen);
+  border-bottom-color: var(--glass-border);
+}
+
 /* Hard requirement (#156): approval and memory proposal cards are never glassy.
    They stay 100% opaque, high contrast, and the most legible thing on screen. */
 .approval-card,
@@ -1194,6 +1241,7 @@ blockquote.memory-text {
 /* Glass effect turned off in Settings → Display, or Automatic with system accessibility settings:
    fall back to solid surfaces matching pre-#156 main and disable GPU blur (#156). */
 .app[data-glass="off"] {
+  background-image: none;
   --glass-bg: var(--surface);
   --glass-bg-elevated: var(--surface);
   --glass-sheen: none;
@@ -1231,7 +1279,9 @@ blockquote.memory-text {
 @media (prefers-reduced-transparency: reduce),
   (prefers-contrast: more),
   (forced-colors: active) {
-  .app[data-glass="auto"] {
+  .app[data-glass="auto"],
+  .app[data-glass="on"] {
+    background-image: none;
     --glass-bg: var(--surface);
     --glass-bg-elevated: var(--surface);
     --glass-sheen: none;
@@ -1258,41 +1308,21 @@ blockquote.memory-text {
     --glass-tab-vertical-bg: color-mix(in srgb, var(--accent) 15%, transparent);
   }
 
+  .app[data-glass="auto"] .app-top,
+  .app[data-glass="on"] .app-top {
+    background: var(--bg);
+  }
+
+  .app[data-glass="auto"] .app-header,
+  .app[data-glass="on"] .app-header {
+    background: var(--surface);
+    border-bottom-color: var(--border);
+  }
+
   .app[data-glass="auto"] button,
   .app[data-glass="auto"] .tabs [role="tab"],
   .app[data-glass="auto"] .side-panel,
-  .app[data-glass="auto"] .modal-backdrop .side-panel {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
-@media (forced-colors: active) {
-  .app[data-glass="on"] {
-    --glass-bg: var(--surface);
-    --glass-bg-elevated: var(--surface);
-    --glass-sheen: none;
-    --glass-border: var(--border);
-    --glass-panel-border-bottom: 2px solid var(--border);
-    --glass-highlight: 0 0 0 transparent;
-    --glass-shadow: 0 0 0 transparent;
-    --glass-ambient: none;
-    --glass-button-bg: var(--surface);
-    --glass-button-sheen: none;
-    --glass-button-border: var(--border);
-    --glass-button-shadow: none;
-    --glass-tab-active-bg: transparent;
-    --glass-tab-active-shadow: none;
-    --glass-rail-bg: var(--surface);
-    --glass-button-radius: 0.45rem;
-    --glass-button-blur: 0px;
-    --glass-accent-gloss: none;
-    --glass-tab-radius: 0;
-    --glass-tab-vertical-radius: 0.4rem;
-    --glass-tab-underline: var(--accent);
-    --glass-tab-vertical-bg: color-mix(in srgb, var(--accent) 15%, transparent);
-  }
-
+  .app[data-glass="auto"] .modal-backdrop .side-panel,
   .app[data-glass="on"] button,
   .app[data-glass="on"] .tabs [role="tab"],
   .app[data-glass="on"] .side-panel,
